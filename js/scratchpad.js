@@ -41,6 +41,10 @@ window.Scratchpad = (function () {
 
     function startDraw(e) {
       e.preventDefault();
+      if (window.getSelection) {
+        const sel = window.getSelection();
+        if (sel && sel.removeAllRanges) sel.removeAllRanges();
+      }
       drawing = true;
       const pos = getPos(e);
       ctx.beginPath();
@@ -76,6 +80,15 @@ window.Scratchpad = (function () {
     canvasEl.addEventListener('pointermove', moveDraw);
     canvasEl.addEventListener('pointerup', endDraw);
     canvasEl.addEventListener('pointercancel', endDraw);
+    canvasEl.addEventListener('selectstart', e => e.preventDefault());
+    canvasEl.addEventListener('contextmenu', e => e.preventDefault());
+    canvasEl.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+    canvasEl.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+    if (canvasEl.parentElement) {
+      canvasEl.parentElement.addEventListener('selectstart', e => e.preventDefault());
+      canvasEl.parentElement.addEventListener('contextmenu', e => e.preventDefault());
+    }
 
     if (controls && controls.clearBtn) {
       controls.clearBtn.addEventListener('click', clear);

@@ -40,10 +40,10 @@ for (const cat of categories) {
           num: String(task.answer.num * 2),
           den: String(task.answer.den * 2)
         });
-        if (cat === MG.CATEGORIES.FRACTIONS_REDUCE) {
-          assert.strictEqual(unreduced.status, 'partial_reduce', 'Kategorie 5 muss teilweise gekürzte Brüche abweisen');
+        if (!task.allowUnreduced) {
+          assert.strictEqual(unreduced.status, 'partial_reduce', 'Aufgabe ohne allowUnreduced muss teilweise gekürzte Brüche abweisen');
         } else {
-          assert.strictEqual(unreduced.status, 'unreduced_ok', 'Kategorie 1 muss ungekürzte Brüche mit Hinweis akzeptieren');
+          assert.strictEqual(unreduced.status, 'unreduced_ok', 'Aufgabe mit allowUnreduced muss ungekürzte Brüche mit Hinweis akzeptieren');
         }
       }
     }

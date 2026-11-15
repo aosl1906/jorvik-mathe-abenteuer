@@ -636,6 +636,14 @@ body {
   line-height: 1.5;
 }
 
+.task-prompt.word-problem {
+  font-size: 1.15rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 16px 18px;
+  line-height: 1.65;
+}
+
 .task-form {
   display: flex;
   flex-direction: column;
@@ -672,6 +680,35 @@ body {
   font-size: 1.2rem;
   font-weight: 700;
   color: var(--ink-dark);
+}
+
+.btn-clear-input {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid #d5c199;
+  background: #fff9ec;
+  color: #6b5335;
+  font-size: 1.1rem;
+  font-weight: 800;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition: background 0.15s ease, transform 0.1s ease, border-color 0.15s ease;
+}
+
+.btn-clear-input:hover {
+  background: #fde8c8;
+  border-color: var(--gold-main);
+  color: var(--ink-dark);
+}
+
+.btn-clear-input:active {
+  transform: scale(0.93);
 }
 
 .frac-input-box {
@@ -739,9 +776,26 @@ body {
   color: #831843;
 }
 
+.feedback-explanation {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(131, 24, 67, 0.25);
+  font-weight: 500;
+  font-size: 0.92rem;
+}
+
+.next-task-wrap {
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+}
+
 /* Schmierzettel */
 .scratchpad-card {
   padding: 14px 16px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .scratchpad-header {
@@ -753,12 +807,18 @@ body {
   margin-bottom: 10px;
   font-weight: 700;
   font-size: 0.92rem;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .scratchpad-tools {
   display: flex;
   align-items: center;
   gap: 6px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .pen-btn {
@@ -791,6 +851,10 @@ body {
   border: 1.5px solid #d5c199;
   border-radius: var(--radius-md);
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
   cursor: crosshair;
   display: block;
 }

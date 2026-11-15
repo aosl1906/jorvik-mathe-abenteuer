@@ -16,7 +16,8 @@
     FRACTIONS_UNITS: 'fractions_units',
     SIGNED_MUL_DIV: 'signed_mul_div',
     BRACKETS_ORDER: 'brackets_order',
-    FRACTIONS_REDUCE: 'fractions_reduce'
+    FRACTIONS_REDUCE: 'fractions_reduce',
+    WORD_PROBLEMS: 'word_problems'
   };
 
   const CATEGORY_LABELS = {
@@ -24,7 +25,8 @@
     fractions_units: 'Brüche & Einheiten',
     signed_mul_div: 'Vorzeichen (· und :)',
     brackets_order: 'Klammern & Punkt-vor-Strich',
-    fractions_reduce: 'Brüche kürzen'
+    fractions_reduce: 'Brüche kürzen',
+    word_problems: '📖 Textaufgaben'
   };
 
   function randInt(min, max) {
@@ -348,6 +350,229 @@
   }
 
   // =========================================================================
+  // 6. Textaufgaben (alle Themengebiete rund um Jorvik)
+  // =========================================================================
+  function generateWordProblem(difficulty = 'normal') {
+    const subType = pick([
+      CATEGORIES.FRACTIONS_OPS,
+      CATEGORIES.FRACTIONS_UNITS,
+      CATEGORIES.SIGNED_MUL_DIV,
+      CATEGORIES.BRACKETS_ORDER,
+      CATEGORIES.FRACTIONS_REDUCE
+    ]);
+
+    if (subType === CATEGORIES.FRACTIONS_OPS) {
+      const variant = randInt(1, 3);
+      const maxDen = difficulty === 'easy' ? 6 : 8;
+      let d1 = randInt(2, maxDen);
+      let d2 = randInt(2, maxDen);
+      let n1 = randInt(1, d1 - 1);
+      let n2 = randInt(1, d2 - 1);
+
+      if (variant === 1) {
+        // Addition: Reitstrecke oder Futter
+        const resNum = n1 * d2 + n2 * d1;
+        const resDen = d1 * d2;
+        const s = simplify(resNum, resDen);
+        const cDen = lcm(d1, d2);
+        const story = pick([
+          `Lisa reitet morgens ${fracHTML(n1, d1)} km durch Moorland und nachmittags noch ${fracHTML(n2, d2)} km durch den Hollow Woods. Wie viele Kilometer ist sie insgesamt geritten?`,
+          `Im Stall bekommt Starshine morgens ${fracHTML(n1, d1)} kg Hafer und abends ${fracHTML(n2, d2)} kg Hafer. Wie viel Kilogramm Hafer frisst er an diesem Tag?`
+        ]);
+        return {
+          category: CATEGORIES.WORD_PROBLEMS,
+          subCategory: CATEGORIES.FRACTIONS_OPS,
+          inputType: 'fraction',
+          allowUnreduced: true,
+          promptHTML: story,
+          answer: s,
+          displayAnswerHTML: s.den === 1 ? `${s.num}` : fracHTML(s.num, s.den),
+          hint: `Addiere die beiden Brüche. Bringe sie dafür zuerst auf den gemeinsamen Nenner ${cDen}.`,
+          explanation: `Rechnung: ${n1 * (cDen / d1)}/${cDen} + ${n2 * (cDen / d2)}/${cDen} = ${resNum * (cDen / resDen)}/${cDen}` + (s.den === 1 ? ` = ${s.num}` : ` = ${s.num}/${s.den}`),
+          raw: { n1, d1, n2, d2, op: '+' }
+        };
+      }
+
+      if (variant === 2) {
+        // Subtraktion: Wasser/Futter übrig
+        if (n1 * d2 <= n2 * d1) {
+          const tn = n1; const td = d1;
+          n1 = n2; d1 = d2;
+          n2 = tn; d2 = td;
+          if (n1 * d2 === n2 * d1) {
+            n1 = d1; // sicherstellen dass n1/d1 > n2/d2
+          }
+        }
+        const resNum = n1 * d2 - n2 * d1;
+        const resDen = d1 * d2;
+        const s = simplify(resNum, resDen);
+        const cDen = lcm(d1, d2);
+        const story = `Im Eimer sind ${fracHTML(n1, d1)} Liter Wasser. Pony Keks trinkt davon ${fracHTML(n2, d2)} Liter. Wie viel Liter Wasser bleiben im Eimer?`;
+        return {
+          category: CATEGORIES.WORD_PROBLEMS,
+          subCategory: CATEGORIES.FRACTIONS_OPS,
+          inputType: 'fraction',
+          allowUnreduced: true,
+          promptHTML: story,
+          answer: s,
+          displayAnswerHTML: s.den === 1 ? `${s.num}` : fracHTML(s.num, s.den),
+          hint: `Subtrahiere den getrunkenen Teil vom Anfangswert. Der gemeinsame Nenner ist ${cDen}.`,
+          explanation: `Rechnung: ${n1 * (cDen / d1)}/${cDen} − ${n2 * (cDen / d2)}/${cDen} = ${s.num}/${s.den}`,
+          raw: { n1, d1, n2, d2, op: '-' }
+        };
+      }
+
+      // Multiplikation: Anteil von einem Anteil
+      const resNum = n1 * n2;
+      const resDen = d1 * d2;
+      const s = simplify(resNum, resDen);
+      const story = `Ein Sack Möhren wiegt ${fracHTML(n1, d1)} kg. Maya nimmt davon ${fracHTML(n2, d2)} für ihren Ausritt mit. Wie viel Kilogramm Möhren nimmt sie mit?`;
+      return {
+        category: CATEGORIES.WORD_PROBLEMS,
+        subCategory: CATEGORIES.FRACTIONS_OPS,
+        inputType: 'fraction',
+        allowUnreduced: true,
+        promptHTML: story,
+        answer: s,
+        displayAnswerHTML: s.den === 1 ? `${s.num}` : fracHTML(s.num, s.den),
+        hint: `„Ein Bruchteil von etwas“ bedeutet: Brüche multiplizieren! Rechne Zähler mal Zähler und Nenner mal Nenner.`,
+        explanation: `Rechnung: (${n1} · ${n2}) über (${d1} · ${d2}) = ${resNum}/${resDen} (gekürzt: ${s.num}/${s.den})`,
+        raw: { n1, d1, n2, d2, op: '·' }
+      };
+    }
+
+    if (subType === CATEGORIES.FRACTIONS_UNITS) {
+      const scenarios = [
+        {
+          fromUnit: 'h',
+          toUnit: 'min',
+          factor: 60,
+          dens: [2, 3, 4, 5, 6, 10, 12],
+          makeText: (n, d, amt) => `Der Ausritt zum Leuchtturm dauert ${fracHTML(n, d)} Stunden. Wie viele Minuten sind das?`
+        },
+        {
+          fromUnit: 'km',
+          toUnit: 'm',
+          factor: 1000,
+          dens: [2, 4, 5, 8, 10],
+          makeText: (n, d) => `Die neue Reitstrecke in Firgrove ist ${fracHTML(n, d)} km lang. Wie viele Meter sind das?`
+        },
+        {
+          fromUnit: 'kg',
+          toUnit: 'g',
+          factor: 1000,
+          dens: [2, 4, 5, 8, 10],
+          makeText: (n, d) => `Für die Pferde werden ${fracHTML(n, d)} kg Leckerlis abgewogen. Wie viele Gramm sind das?`
+        }
+      ];
+      const sc = pick(scenarios);
+      const den = pick(difficulty === 'easy' ? sc.dens.filter(d => d <= 6) : sc.dens);
+      const num = randInt(1, den - 1);
+      const s = simplify(num, den);
+      const ans = (sc.factor / s.den) * s.num;
+
+      return {
+        category: CATEGORIES.WORD_PROBLEMS,
+        subCategory: CATEGORIES.FRACTIONS_UNITS,
+        inputType: 'integer',
+        unitLabel: sc.toUnit,
+        promptHTML: sc.makeText(s.num, s.den, 1),
+        answer: ans,
+        displayAnswerHTML: `${ans} ${sc.toUnit}`,
+        hint: `1 ${sc.fromUnit} sind ${sc.factor} ${sc.toUnit}. Teile ${sc.factor} durch ${s.den} und multipliziere mit ${s.num}.`,
+        explanation: `1 ${sc.fromUnit} = ${sc.factor} ${sc.toUnit}. Erst ${sc.factor} : ${s.den} = ${sc.factor / s.den} ${sc.toUnit}, dann · ${s.num} = ${ans} ${sc.toUnit}.`,
+        raw: { amount: 1, num: s.num, den: s.den, fromUnit: sc.fromUnit, toUnit: sc.toUnit, factor: sc.factor }
+      };
+    }
+
+    if (subType === CATEGORIES.SIGNED_MUL_DIV) {
+      const hours = randInt(3, difficulty === 'easy' ? 6 : 9);
+      const drop = -randInt(2, difficulty === 'easy' ? 5 : 8);
+      const ans = hours * drop;
+      const story = pick([
+        `Im frostigen Dinotal sinkt die Temperatur jede Stunde um ${Math.abs(drop)} °C (also ${drop} °C pro Stunde). Wie groß ist die gesamte Temperaturänderung nach ${hours} Stunden?`,
+        `Bei einer Klettertour im Gebirge geht es ${hours} Abschnitte lang jeweils ${Math.abs(drop)} Meter bergab (${drop} m pro Abschnitt). Wie viele Meter Höhenunterschied sind das insgesamt?`
+      ]);
+      return {
+        category: CATEGORIES.WORD_PROBLEMS,
+        subCategory: CATEGORIES.SIGNED_MUL_DIV,
+        inputType: 'integer',
+        unitLabel: '',
+        promptHTML: story,
+        answer: ans,
+        displayAnswerHTML: `${ans}`,
+        hint: `Es sinkt bzw. geht bergab – das Ergebnis hat also ein Minuszeichen! Rechne ${hours} · (${drop}).`,
+        explanation: `Plus mal Minus ergibt Minus: ${hours} · (${drop}) = ${ans}.`,
+        raw: { a: hours, b: drop, op: '·' }
+      };
+    }
+
+    if (subType === CATEGORIES.BRACKETS_ORDER) {
+      const variant = randInt(1, 2);
+      if (variant === 1) {
+        const stalls = randInt(3, 6);
+        const horsesPerStall = randInt(2, 4);
+        const guestHorses = randInt(2, 5);
+        const applesEach = randInt(2, 4);
+        const ans = (stalls * horsesPerStall + guestHorses) * applesEach;
+        return {
+          category: CATEGORIES.WORD_PROBLEMS,
+          subCategory: CATEGORIES.BRACKETS_ORDER,
+          inputType: 'integer',
+          unitLabel: 'Äpfel',
+          promptHTML: `Im Stall von Moorland stehen ${stalls} Boxen mit je ${horsesPerStall} Pferden. Dazu kommen ${guestHorses} Gastpferde. Jedes Pferd bekommt ${applesEach} Äpfel. Wie viele Äpfel werden insgesamt verteilt?`,
+          answer: ans,
+          displayAnswerHTML: `${ans} Äpfel`,
+          hint: `Rechne zuerst die Gesamtzahl der Pferde aus: (${stalls} · ${horsesPerStall} + ${guestHorses}), und nimm das Ergebnis mal ${applesEach}.`,
+          explanation: `Pferde im Stall: ${stalls} · ${horsesPerStall} = ${stalls * horsesPerStall}, plus ${guestHorses} Gastpferde = ${stalls * horsesPerStall + guestHorses} Pferde. Mal ${applesEach} Äpfel = ${ans} Äpfel.`,
+          raw: { pattern: 1 }
+        };
+      } else {
+        const bags = randInt(2, 5);
+        const priceBag = randInt(4, 9);
+        const brushes = randInt(2, 4);
+        const priceBrush = randInt(3, 7);
+        const ans = bags * priceBag + brushes * priceBrush;
+        return {
+          category: CATEGORIES.WORD_PROBLEMS,
+          subCategory: CATEGORIES.BRACKETS_ORDER,
+          inputType: 'integer',
+          unitLabel: 'JS',
+          promptHTML: `Linda kauft im Reitershop ${bags} Beutel Leckerlis zu je ${priceBag} Jorvik-Schillingen (JS) und ${brushes} Putzbürsten zu je ${priceBrush} JS. Wie viel muss sie insgesamt bezahlen?`,
+          answer: ans,
+          displayAnswerHTML: `${ans} JS`,
+          hint: `Punkt-vor-Strich! Rechne zuerst ${bags} · ${priceBag} und ${brushes} · ${priceBrush}, und addiere dann beide Beträge.`,
+          explanation: `Leckerlis: ${bags} · ${priceBag} = ${bags * priceBag} JS. Bürsten: ${brushes} · ${priceBrush} = ${brushes * priceBrush} JS. Zusammen: ${bags * priceBag} + ${brushes * priceBrush} = ${ans} JS.`,
+          raw: { pattern: 2 }
+        };
+      }
+    }
+
+    // FRACTIONS_REDUCE als Textaufgabe
+    const basePairs = [[1, 2], [1, 3], [2, 3], [1, 4], [3, 4], [2, 5], [3, 5], [4, 5], [5, 6]];
+    const [baseNum, baseDen] = pick(basePairs);
+    const mult = difficulty === 'easy' ? pick([2, 3, 4]) : pick([3, 4, 5, 6]);
+    const num = baseNum * mult;
+    const den = baseDen * mult;
+    const story = pick([
+      `Beim Springturnier in Silverglade gibt es ${den} Hindernisse. Starshine überspringt ${num} davon fehlerfrei. Gib den Anteil als vollständig gekürzten Bruch an!`,
+      `Im Stall stehen ${den} Pferde. Davon sind ${num} Pferde bereits gestriegelt. Welcher Anteil ist schon fertig? (Vollständig kürzen!)`
+    ]);
+    return {
+      category: CATEGORIES.WORD_PROBLEMS,
+      subCategory: CATEGORIES.FRACTIONS_REDUCE,
+      inputType: 'fraction',
+      allowUnreduced: false,
+      promptHTML: story,
+      answer: { num: baseNum, den: baseDen },
+      displayAnswerHTML: fracHTML(baseNum, baseDen),
+      hint: `Schreibe zuerst ${num} über ${den} als Bruch und kürze Zähler und Nenner durch ihre gemeinsame Zahl (${mult}).`,
+      explanation: `Anteil: ${num} von ${den}. Beide Zahlen lassen sich durch ${mult} teilen: (${num} : ${mult}) über (${den} : ${mult}) = ${baseNum}/${baseDen}.`,
+      raw: { num, den, baseNum, baseDen, mult }
+    };
+  }
+
+  // =========================================================================
   // Haupt-Generator & Antwort-Prüfung
   // =========================================================================
   function generateTask(activeCategories, difficulty = 'normal') {
@@ -362,6 +587,7 @@
       case CATEGORIES.SIGNED_MUL_DIV: return generateSignedMulDiv(difficulty);
       case CATEGORIES.BRACKETS_ORDER: return generateBracketsOrder(difficulty);
       case CATEGORIES.FRACTIONS_REDUCE: return generateFractionReduce(difficulty);
+      case CATEGORIES.WORD_PROBLEMS: return generateWordProblem(difficulty);
       default: return generateFractionOps(difficulty);
     }
   }
@@ -430,7 +656,7 @@
   ];
 
   function createMistakeForTask(task) {
-    const cat = task.category;
+    const cat = task.subCategory || task.category;
 
     if (cat === CATEGORIES.SIGNED_MUL_DIV) {
       const { a, b } = task.raw;

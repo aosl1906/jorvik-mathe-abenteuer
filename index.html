@@ -117,6 +117,7 @@
               <div id="integerInputWrap" class="input-wrap hidden">
                 <input id="integerInput" type="number" inputmode="numeric" class="math-input" placeholder="?" aria-label="Antwort eingeben" />
                 <span id="integerUnitLabel" class="unit-tag"></span>
+                <button type="button" id="clearIntegerBtn" class="btn-clear-input" title="Eingabe löschen" aria-label="Eingabe löschen">✕</button>
               </div>
 
               <!-- Bruch-Eingabe (Zähler / Nenner) -->
@@ -126,6 +127,7 @@
                   <div class="frac-input-bar"></div>
                   <input id="denInput" type="number" inputmode="numeric" class="math-input frac-field" placeholder="Nenner" aria-label="Nenner" />
                 </div>
+                <button type="button" id="clearFractionBtn" class="btn-clear-input" title="Bruch-Eingabe löschen" aria-label="Bruch-Eingabe löschen">✕</button>
               </div>
 
               <div class="task-actions">
@@ -136,6 +138,9 @@
 
             <div id="hintBox" class="hint-box hidden"></div>
             <div id="feedbackBox" class="feedback-box hidden"></div>
+            <div id="nextTaskWrap" class="next-task-wrap hidden">
+              <button type="button" id="nextTaskBtn" class="btn-primary">Nächste Aufgabe ➔</button>
+            </div>
           </div>
 
           <!-- Schmierzettel-Modus -->

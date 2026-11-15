@@ -29,7 +29,8 @@
 
     // Anti-Leichtsinns-Schutzschild
     taskShownAt: Date.now(),
-    consecutiveWrong: 0,
+    taskAttempts: 0,
+    taskLocked: false,
     easyTasksRemaining: 0,
 
     // Mode 1: Puzzle
@@ -108,12 +109,17 @@
     integerInputWrap: document.getElementById('integerInputWrap'),
     integerInput: document.getElementById('integerInput'),
     integerUnitLabel: document.getElementById('integerUnitLabel'),
+    clearIntegerBtn: document.getElementById('clearIntegerBtn'),
     fractionInputWrap: document.getElementById('fractionInputWrap'),
     numInput: document.getElementById('numInput'),
     denInput: document.getElementById('denInput'),
+    clearFractionBtn: document.getElementById('clearFractionBtn'),
+    submitAnswerBtn: document.getElementById('submitAnswerBtn'),
     hintBtn: document.getElementById('hintBtn'),
     hintBox: document.getElementById('hintBox'),
     feedbackBox: document.getElementById('feedbackBox'),
+    nextTaskWrap: document.getElementById('nextTaskWrap'),
+    nextTaskBtn: document.getElementById('nextTaskBtn'),
 
     // Mode 2
     examinerStars: document.getElementById('examinerStars'),
@@ -332,16 +338,24 @@
     const diff = state.easyTasksRemaining > 0 ? 'easy' : 'normal';
     state.currentTask = MG.generateTask(state.activeTopics, diff);
     state.taskShownAt = Date.now();
+    state.taskAttempts = 0;
+    state.taskLocked = false;
 
     els.taskCategoryBadge.textContent = MG.CATEGORY_LABELS[state.currentTask.category] || 'Mathe';
     els.taskPrompt.innerHTML = state.currentTask.promptHTML;
+    els.taskPrompt.classList.toggle('word-problem', state.currentTask.category === MG.CATEGORIES.WORD_PROBLEMS);
     els.hintBox.classList.add('hidden');
     els.hintBox.textContent = '';
     els.feedbackBox.classList.add('hidden');
+    els.nextTaskWrap.classList.add('hidden');
 
     els.integerInput.value = '';
     els.numInput.value = '';
     els.denInput.value = '';
+    els.integerInput.disabled = false;
+    els.numInput.disabled = false;
+    els.denInput.disabled = false;
+    els.submitAnswerBtn.disabled = false;
 
     if (state.currentTask.inputType === 'integer') {
       els.integerInputWrap.classList.remove('hidden');
@@ -363,9 +377,15 @@
     els.feedbackBox.classList.remove('hidden');
   }
 
+  function showFeedbackHTML(type, html) {
+    els.feedbackBox.className = `feedback-box ${type}`;
+    els.feedbackBox.innerHTML = html;
+    els.feedbackBox.classList.remove('hidden');
+  }
+
   function handleTaskSubmit(e) {
     e.preventDefault();
-    if (!state.currentTask) return;
+    if (!state.currentTask || state.taskLocked) return;
 
     // Timer automatisch beim ersten Rechnen starten, falls noch pausiert
     if (!state.timerRunning && state.timerSecondsLeft === QUEST_DURATION_SEC) {
@@ -394,7 +414,8 @@
     // Richtige Antwort (oder ungekürzt bei Kategorie 1)
     if (result.status === 'correct' || result.status === 'unreduced_ok') {
       Sound.playCrystal();
-      state.consecutiveWrong = 0;
+      state.taskLocked = true;
+      state.taskAttempts = 0;
       if (state.easyTasksRemaining > 0) {
         state.easyTasksRemaining -= 1;
       }
@@ -428,24 +449,39 @@
       return;
     }
 
-    // Regel B: Reguläre falsche Antwort -> Frust-Bremse zählen
+    // Regel B: Reguläre falsche Antwort -> 3 Versuche pro Aufgabe
     Sound.playGentleWrong();
-    state.consecutiveWrong += 1;
+    state.taskAttempts += 1;
 
-    if (state.consecutiveWrong >= 2) {
-      state.easyTasksRemaining = 2;
-      state.consecutiveWrong = 0;
-      updateShieldBadge();
+    if (state.taskAttempts === 1) {
       showFeedback(
         'gentle',
-        `Kein Problem! Die richtige Lösung wäre ${state.currentTask.displayAnswerHTML.replace(/<[^>]+>/g, ' ').trim()} gewesen. Wir schalten kurz einen Gang zurück für ein sicheres Erfolgserlebnis!`
+        'Fast! Schau dir die Aufgabe noch einmal genau an oder frag die Reitlehrerin um einen Tipp. (Versuch 1 von 3)'
       );
-      setTimeout(loadNextPuzzleTask, 1800);
+    } else if (state.taskAttempts === 2) {
+      els.hintBox.textContent = `🐴 Reitlehrerin: „${state.currentTask.hint}“`;
+      els.hintBox.classList.remove('hidden');
+      showFeedback(
+        'gentle',
+        'Noch nicht ganz! Die Reitlehrerin hat dir einen Tipp dagelassen – du hast noch einen Versuch! (Versuch 2 von 3)'
+      );
     } else {
-      showFeedback(
+      state.taskLocked = true;
+      state.easyTasksRemaining = 2;
+      updateShieldBadge();
+      els.integerInput.disabled = true;
+      els.numInput.disabled = true;
+      els.denInput.disabled = true;
+      els.submitAnswerBtn.disabled = true;
+
+      const explanationText = state.currentTask.explanation || state.currentTask.hint;
+      showFeedbackHTML(
         'gentle',
-        'Fast! Schau dir die Aufgabe noch einmal genau an oder frag die Reitlehrerin um einen Tipp.'
+        `<div>Kein Problem! Die richtige Lösung ist: <strong>${state.currentTask.displayAnswerHTML}</strong></div>` +
+        `<div class="feedback-explanation">🐴 <strong>Erklärung:</strong> ${explanationText}</div>` +
+        `<div class="feedback-explanation">Wir schalten kurz einen Gang zurück für ein sicheres Erfolgserlebnis!</div>`
       );
+      els.nextTaskWrap.classList.remove('hidden');
     }
   }
 
@@ -571,6 +607,22 @@
           inputsRow.appendChild(nInp);
           inputsRow.appendChild(slash);
           inputsRow.appendChild(dInp);
+        }
+
+        if (!state.examGraded) {
+          const clrBtn = document.createElement('button');
+          clrBtn.type = 'button';
+          clrBtn.className = 'btn-clear-input';
+          clrBtn.title = 'Eingabe löschen';
+          clrBtn.setAttribute('aria-label', 'Eingabe löschen');
+          clrBtn.textContent = '✕';
+          clrBtn.addEventListener('click', () => {
+            state.lukasDecisions[item.id].val = '';
+            state.lukasDecisions[item.id].num = '';
+            state.lukasDecisions[item.id].den = '';
+            renderLukasExam();
+          });
+          inputsRow.appendChild(clrBtn);
         }
 
         drawer.appendChild(inputsRow);
@@ -776,6 +828,21 @@
     });
 
     els.taskForm.addEventListener('submit', handleTaskSubmit);
+
+    els.clearIntegerBtn.addEventListener('click', () => {
+      if (state.taskLocked) return;
+      els.integerInput.value = '';
+    });
+
+    els.clearFractionBtn.addEventListener('click', () => {
+      if (state.taskLocked) return;
+      els.numInput.value = '';
+      els.denInput.value = '';
+    });
+
+    els.nextTaskBtn.addEventListener('click', () => {
+      loadNextPuzzleTask();
+    });
 
     els.hintBtn.addEventListener('click', () => {
       if (!state.currentTask) return;
