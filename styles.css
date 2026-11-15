@@ -784,7 +784,7 @@ body {
 
 .scratchpad-canvas {
   width: 100%;
-  height: 175px;
+  height: 350px;
   background: #fffdf7;
   background-image: radial-gradient(#d8ccb4 1px, transparent 1px);
   background-size: 18px 18px;
