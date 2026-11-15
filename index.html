@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jorvik Mathe-Abenteuer • 6. Klasse</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Globale Top-Bar (immer sichtbar) -->
+  <header class="top-bar">
+    <div class="top-bar-inner">
+      <div class="brand">
+        <div class="brand-crest" aria-hidden="true">✦</div>
+        <div>
+          <h1>Jorvik Mathe-Abenteuer</h1>
+          <p class="brand-sub">Magische Reitställe &amp; Kristall-Rätsel</p>
+        </div>
+      </div>
+
+      <!-- 20-Minuten-Abenteuer-Timer -->
+      <div class="quest-timer-box" aria-label="20-Minuten-Abenteuer-Timer">
+        <div class="timer-header">
+          <span class="timer-label">✦ Tages-Quest</span>
+          <span id="timerDisplay" class="timer-digits">20:00</span>
+          <div class="timer-controls">
+            <button id="timerToggleBtn" class="btn-icon" title="Timer starten oder pausieren">▶</button>
+            <button id="timerResetBtn" class="btn-icon" title="Timer zurücksetzen">↺</button>
+          </div>
+        </div>
+        <div class="quest-progress-track" title="Fortschritt deiner 20-Minuten-Tages-Quest">
+          <div id="questProgressBar" class="quest-progress-fill" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Navigation & Mute -->
+      <div class="top-actions">
+        <nav class="mode-tabs" aria-label="Spielmodus wählen">
+          <button class="mode-tab active" data-mode="puzzle">✨ Bild-Puzzle</button>
+          <button class="mode-tab" data-mode="detective">🖍️ Fehler-Detektiv</button>
+          <button class="mode-tab" data-mode="vault">🏆 Schatzkammer <span id="vaultCountBadge" class="badge">0</span></button>
+        </nav>
+        <button id="muteBtn" class="btn-mute" title="Sound an/aus" aria-label="Sound stummschalten">🔊</button>
+      </div>
+    </div>
+
+    <!-- Themen-Auswahl (Filter) -->
+    <div class="topic-bar">
+      <div class="topic-bar-inner">
+        <span class="topic-bar-label">Themen:</span>
+        <div id="topicFilters" class="topic-pills"></div>
+        <div id="shieldStatus" class="shield-badge" title="Anti-Leichtsinns-Schutzschild">
+          🛡️ Schutzschild aktiv
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- =========================================================
+         SPIELMODUS 1: Magisches Bild-Puzzle
+         ========================================================= -->
+    <section id="mode-puzzle" class="mode-section active">
+      <div class="puzzle-toolbar">
+        <div class="toolbar-group">
+          <span class="toolbar-label">Abenteuer-Größe:</span>
+          <button id="grid12Btn" class="btn-pill active">Schneller Ritt (12 Teile)</button>
+          <button id="grid16Btn" class="btn-pill">Großes Abenteuer (16 Teile)</button>
+        </div>
+        <div class="toolbar-group">
+          <label for="artworkSelect" class="toolbar-label">Motiv:</label>
+          <select id="artworkSelect" class="select-fantasy"></select>
+          <label class="btn-pill btn-upload" title="Eigenes Bild vom Computer laden">
+            📷 Eigenes Bild
+            <input id="customImageInput" type="file" accept="image/*" hidden />
+          </label>
+        </div>
+      </div>
+
+      <div class="puzzle-layout">
+        <!-- Linke Spalte: Das Kristall-Puzzle -->
+        <div class="puzzle-stage-card">
+          <div class="puzzle-header">
+            <div>
+              <h2 id="puzzleTitle">Das Sternenpferd im Wald von Jorvik</h2>
+              <p id="puzzleSubtitle" class="muted-text">Hollow Woods • Magische Lichtung</p>
+            </div>
+            <div class="tile-counter">
+              <span id="tilesRemainingText">12</span> Kristalle übrig
+            </div>
+          </div>
+
+          <div id="puzzleBoard" class="puzzle-board grid-12">
+            <img id="puzzleImage" src="" alt="Jorvik Puzzle-Bild" />
+            <div id="puzzleTiles" class="puzzle-tiles"></div>
+          </div>
+
+          <div id="puzzleCompletedBanner" class="completed-banner hidden">
+            <h3>🌟 Bild vollständig enthüllt!</h3>
+            <p>Dieses magische Artwork wurde in deiner Schatzkammer gespeichert.</p>
+            <button id="nextPuzzleBtn" class="btn-primary">Nächstes Abenteuer starten</button>
+          </div>
+        </div>
+
+        <!-- Rechte Spalte: Aufgabe + Schmierzettel -->
+        <div class="task-column">
+          <div class="parchment-card task-card">
+            <div class="task-meta">
+              <span id="taskCategoryBadge" class="cat-badge">Bruchrechnen</span>
+              <span id="difficultyBadge" class="diff-badge hidden">🌿 Sanfter Galopp (Aufhol-Hilfe)</span>
+            </div>
+
+            <div id="taskPrompt" class="task-prompt"></div>
+
+            <form id="taskForm" class="task-form" autocomplete="off">
+              <!-- Ganzzahl-Eingabe -->
+              <div id="integerInputWrap" class="input-wrap hidden">
+                <input id="integerInput" type="number" inputmode="numeric" class="math-input" placeholder="?" aria-label="Antwort eingeben" />
+                <span id="integerUnitLabel" class="unit-tag"></span>
+              </div>
+
+              <!-- Bruch-Eingabe (Zähler / Nenner) -->
+              <div id="fractionInputWrap" class="input-wrap hidden">
+                <div class="frac-input-box">
+                  <input id="numInput" type="number" inputmode="numeric" class="math-input frac-field" placeholder="Zähler" aria-label="Zähler" />
+                  <div class="frac-input-bar"></div>
+                  <input id="denInput" type="number" inputmode="numeric" class="math-input frac-field" placeholder="Nenner" aria-label="Nenner" />
+                </div>
+              </div>
+
+              <div class="task-actions">
+                <button type="submit" id="submitAnswerBtn" class="btn-primary">Antwort prüfen ✨</button>
+                <button type="button" id="hintBtn" class="btn-secondary">🐴 Hilfe von der Reitlehrerin</button>
+              </div>
+            </form>
+
+            <div id="hintBox" class="hint-box hidden"></div>
+            <div id="feedbackBox" class="feedback-box hidden"></div>
+          </div>
+
+          <!-- Schmierzettel-Modus -->
+          <div class="parchment-card scratchpad-card">
+            <div class="scratchpad-header">
+              <span>📝 Schmierzettel (für Nebenrechnungen)</span>
+              <div class="scratchpad-tools">
+                <button type="button" class="pen-btn active" data-color="#2c221e" title="Dunkle Tinte" style="background:#2c221e"></button>
+                <button type="button" class="pen-btn" data-color="#1d6fa5" title="Magie-Blau" style="background:#1d6fa5"></button>
+                <button type="button" class="pen-btn" data-color="#b85d19" title="Gold-Braun" style="background:#b85d19"></button>
+                <button type="button" class="pen-btn eraser-btn" data-eraser="true" title="Radiergummi">🧽</button>
+                <button type="button" id="clearScratchBtn" class="btn-small">Leeren</button>
+              </div>
+            </div>
+            <canvas id="scratchpadCanvas" class="scratchpad-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         SPIELMODUS 2: Der Jorvik-Fehler-Detektiv
+         ========================================================= -->
+    <section id="mode-detective" class="mode-section">
+      <div class="detective-header parchment-card">
+        <div class="lukas-profile">
+          <div class="lukas-avatar" aria-hidden="true">
+            <svg viewBox="0 0 80 80" width="68" height="68">
+              <circle cx="40" cy="40" r="38" fill="#23484c" stroke="#d4a24c" stroke-width="3"/>
+              <circle cx="40" cy="36" r="18" fill="#f5cba7"/>
+              <path d="M20 30 Q40 12 60 30 Q54 18 40 18 Q26 18 20 30 Z" fill="#6b3e26"/>
+              <path d="M16 26 L64 26 L56 16 Q40 10 24 16 Z" fill="#1e3c4c"/>
+              <circle cx="34" cy="36" r="2.5" fill="#2c221e"/>
+              <circle cx="46" cy="36" r="2.5" fill="#2c221e"/>
+              <path d="M34 45 Q40 50 46 45" fill="none" stroke="#8a4b38" stroke-width="2.2" stroke-linecap="round"/>
+              <path d="M22 68 Q40 54 58 68" fill="#2e6f5e"/>
+            </svg>
+          </div>
+          <div>
+            <h2>Lukas aus Moorland braucht deine Hilfe!</h2>
+            <p class="lukas-quote">„Ich war vorhin so aufgeregt wegen dem Ausritt, dass ich bei meiner Mathe-Arbeit bestimmt ein paar Flüchtigkeitsfehler gemacht habe. Kannst du als Reitlehrerin alles mit dem Rotstift prüfen?“</p>
+          </div>
+        </div>
+        <div class="detective-score">
+          <div class="star-counter">⭐ <span id="examinerStars">0</span> Prüfer-Sterne</div>
+          <button id="newExamBtn" class="btn-secondary">Neue Arbeit von Lukas</button>
+        </div>
+      </div>
+
+      <div class="clipboard-wrapper">
+        <div class="clipboard-clip"></div>
+        <div class="clipboard-paper">
+          <div class="clipboard-title-row">
+            <h3>📋 Klassenarbeit – Name: Lukas (Moorland-Stall)</h3>
+            <span id="examProgressText" class="muted-text">0 von 6 geprüft</span>
+          </div>
+
+          <div id="lukasExamList" class="exam-list"></div>
+
+          <div class="exam-footer">
+            <button id="gradeExamBtn" class="btn-primary">Klassenarbeit fertig korrigieren 🖍️</button>
+          </div>
+          <div id="examSummaryBox" class="completed-banner hidden"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         SCHATZKAMMER (LocalStorage Galerie)
+         ========================================================= -->
+    <section id="mode-vault" class="mode-section">
+      <div class="parchment-card vault-header">
+        <div>
+          <h2>🏆 Deine Jorvik-Schatzkammer</h2>
+          <p>Jedes vollständig aufgedeckte Puzzle wird hier als magisches Erinnerungsbild gesammelt.</p>
+        </div>
+        <div class="vault-stats">
+          <div class="stat-pill">✨ Gelöste Aufgaben: <strong id="statSolved">0</strong></div>
+          <div class="stat-pill">🧩 Bilder gesammelt: <strong id="statPuzzles">0</strong></div>
+          <div class="stat-pill">⭐ Prüfer-Sterne: <strong id="statStars">0</strong></div>
+        </div>
+      </div>
+      <div id="vaultGallery" class="vault-gallery"></div>
+    </section>
+  </main>
+
+  <!-- Abschluss-Modal für den 20-Minuten-Timer -->
+  <div id="questModal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-card parchment-card">
+      <div class="modal-icon">🐴✨</div>
+      <h2>Tages-Quest erfüllt!</h2>
+      <p>Du hast 20 Minuten lang großartig gerechnet und deine magischen Kräfte in Jorvik trainiert. Zeit für eine wohlverdiente Pause auf der Koppel!</p>
+      <div class="modal-actions">
+        <button id="questContinueBtn" class="btn-secondary">Noch ein bisschen weiterspielen</button>
+        <button id="questResetCloseBtn" class="btn-primary">Timer neu starten (20:00)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts (klassisch geladen, damit es auch direkt per file:// ohne Server läuft) -->
+  <script src="assets/puzzles/customPuzzles.js"></script>
+  <script src="js/soundEngine.js"></script>
+  <script src="js/artworkGenerator.js"></script>
+  <script src="js/mathGenerator.js"></script>
+  <script src="js/scratchpad.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
