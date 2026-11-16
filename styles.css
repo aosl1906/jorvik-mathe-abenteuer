@@ -253,6 +253,9 @@ body {
   font-weight: 700;
   cursor: pointer;
   max-width: min(100%, 760px);
+  min-height: 36px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: background 0.15s, border-color 0.15s;
 }
 
@@ -279,6 +282,8 @@ body {
 .topic-drawer {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(8, 18, 15, 0.72);
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .topic-drawer-inner {
