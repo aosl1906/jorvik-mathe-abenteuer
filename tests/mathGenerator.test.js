@@ -13,6 +13,7 @@ for (const cat of categories) {
       assert.strictEqual(task.category, cat);
       assert.ok(task.promptHTML && task.promptHTML.length > 0, 'promptHTML darf nicht leer sein');
       assert.ok(task.hint && task.hint.length > 0, 'hint darf nicht leer sein');
+      assert.ok(task.explanation && task.explanation.length > 0, 'explanation darf nicht leer sein');
       const plainText = task.promptHTML.replace(/<[^>]+>/g, '');
       assert.ok(!plainText.includes('/'), `Kein Schrägstrich im Aufgabentext erlaubt: ${plainText}`);
 
@@ -24,6 +25,16 @@ for (const cat of categories) {
         // Prüfe checkAnswer
         assert.strictEqual(MG.checkAnswer(task, { value: String(task.answer) }).status, 'correct');
         assert.strictEqual(MG.checkAnswer(task, { value: String(task.answer + 1) }).status, 'wrong');
+      } else if (task.inputType === 'decimal') {
+        assert.strictEqual(typeof task.answer, 'number');
+        assert.ok(Number.isFinite(task.answer), 'Antwort muss endlich sein');
+
+        const commaStr = String(task.answer).replace('.', ',');
+        const dotStr = String(task.answer);
+        assert.strictEqual(MG.checkAnswer(task, { value: commaStr }).status, 'correct');
+        assert.strictEqual(MG.checkAnswer(task, { value: dotStr }).status, 'correct');
+        assert.strictEqual(MG.checkAnswer(task, { value: String(task.answer + 1) }).status, 'wrong');
+        assert.strictEqual(MG.checkAnswer(task, { value: 'abc' }).status, 'invalid');
       } else if (task.inputType === 'fraction') {
         assert.ok(Number.isInteger(task.answer.num));
         assert.ok(Number.isInteger(task.answer.den) && task.answer.den > 0);
@@ -34,6 +45,14 @@ for (const cat of categories) {
           MG.checkAnswer(task, { num: String(task.answer.num), den: String(task.answer.den) }).status,
           'correct'
         );
+
+        if (task.answer.den === 1) {
+          assert.strictEqual(
+            MG.checkAnswer(task, { num: String(task.answer.num), den: '' }).status,
+            'correct',
+            'Ganzzahliges Bruchergebnis muss auch mit leerem Nenner akzeptiert werden'
+          );
+        }
 
         // Ungekürzte äquivalente Antwort (Faktor 2)
         const unreduced = MG.checkAnswer(task, {
@@ -66,5 +85,11 @@ for (let i = 0; i < 100; i++) {
     }
   }
 }
+
+// 3. Expliziter Test für leeren Nenner bei ganzzahligen Bruchergebnissen
+const wholeFracTask = { inputType: 'fraction', allowUnreduced: true, answer: { num: 2, den: 1 } };
+assert.strictEqual(MG.checkAnswer(wholeFracTask, { num: '2', den: '' }).status, 'correct');
+assert.strictEqual(MG.checkAnswer(wholeFracTask, { num: '3', den: '' }).status, 'wrong');
+assert.strictEqual(MG.checkAnswer(wholeFracTask, { num: '', den: '' }).status, 'invalid');
 
 console.log('Alle 5.000+ generierten Aufgaben und 100 Lukas-Klassenarbeiten erfolgreich validiert!');

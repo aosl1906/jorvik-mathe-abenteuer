@@ -17,6 +17,8 @@
     SIGNED_MUL_DIV: 'signed_mul_div',
     BRACKETS_ORDER: 'brackets_order',
     FRACTIONS_REDUCE: 'fractions_reduce',
+    DECIMALS_OPS: 'decimals_ops',
+    DECIMALS_CONVERT: 'decimals_convert',
     WORD_PROBLEMS: 'word_problems'
   };
 
@@ -26,6 +28,8 @@
     signed_mul_div: 'Vorzeichen (· und :)',
     brackets_order: 'Klammern & Punkt-vor-Strich',
     fractions_reduce: 'Brüche kürzen',
+    decimals_ops: 'Dezimalzahlen (+, −, ·, :)',
+    decimals_convert: 'Brüche ↔ Dezimalzahlen',
     word_problems: '📖 Textaufgaben'
   };
 
@@ -71,6 +75,22 @@
   function signedHTML(n) {
     if (n >= 0) return `(+${n})`;
     return `(${n})`;
+  }
+
+  function roundTo(n, decimals = 4) {
+    const f = Math.pow(10, decimals);
+    return Math.round((n + Number.EPSILON) * f) / f;
+  }
+
+  function formatDE(n) {
+    return String(roundTo(n, 4)).replace('.', ',');
+  }
+
+  function parseDecimalInput(raw) {
+    const str = String(raw || '').trim().replace(',', '.');
+    if (!/^[+-]?\d+(\.\d+)?$/.test(str)) return NaN;
+    const val = Number(str);
+    return Number.isFinite(val) ? val : NaN;
   }
 
   // =========================================================================
@@ -125,14 +145,19 @@
     const commonDen = lcm(d1, d2);
 
     let hint = '';
+    let explanation = '';
     if (op === '+' || op === '-') {
       hint = d1 === d2
         ? `Beide Brüche haben schon den gleichen Nenner ${d1}. Du kannst die Zähler direkt ${op === '+' ? 'addieren' : 'subtrahieren'}.`
         : `Suche zuerst den gemeinsamen Hauptnenner von ${d1} und ${d2} (z. B. ${commonDen}) und erweitere beide Brüche.`;
+      const opSym = op === '+' ? '+' : '−';
+      explanation = `Hauptnenner ${commonDen}: ${n1 * (commonDen / d1)}/${commonDen} ${opSym} ${n2 * (commonDen / d2)}/${commonDen} = ${simplified.num}/${simplified.den}` + (simplified.den === 1 ? ` = ${simplified.num}` : '');
     } else if (op === '·') {
       hint = `Bei der Multiplikation rechnest du Zähler mal Zähler (${n1} · ${n2}) und Nenner mal Nenner (${d1} · ${d2}). Tipp: Du darfst auch über Kreuz kürzen!`;
+      explanation = `Rechnung: (${n1} · ${n2}) über (${d1} · ${d2}) = ${resNum}/${resDen} (gekürzt: ${simplified.num}/${simplified.den})`;
     } else {
       hint = `Durch einen Bruch teilt man, indem man mit dem Kehrwert malnimmt: drehe den zweiten Bruch um (${d2} nach oben, ${n2} nach unten) und multipliziere.`;
+      explanation = `Mit Kehrwert malnehmen: (${n1} · ${d2}) über (${d1} · ${n2}) = ${resNum}/${resDen} (gekürzt: ${simplified.num}/${simplified.den})`;
     }
 
     return {
@@ -143,6 +168,7 @@
       answer: { num: simplified.num, den: simplified.den },
       displayAnswerHTML: simplified.den === 1 ? `${simplified.num}` : fracHTML(simplified.num, simplified.den),
       hint,
+      explanation,
       raw: { n1, d1, n2, d2, op }
     };
   }
@@ -195,6 +221,7 @@
     }
 
     const hint = `Rechne zuerst ${amount} ${fromLabel} in ${tpl.toUnit} um (${amount} · ${tpl.factor} = ${totalSmall} ${tpl.toUnit}). Teile dann durch ${den} und nimm mal ${num}.`;
+    const explanation = `${amount} ${fromLabel} = ${totalSmall} ${tpl.toUnit}. Davon (${totalSmall} : ${den}) · ${num} = ${answerVal} ${tpl.toUnit}.`;
 
     return {
       category: CATEGORIES.FRACTIONS_UNITS,
@@ -204,6 +231,7 @@
       answer: answerVal,
       displayAnswerHTML: `${answerVal} ${tpl.toUnit}`,
       hint,
+      explanation,
       raw: { num, den, amount, fromLabel, toUnit: tpl.toUnit, factor: tpl.factor, totalSmall }
     };
   }
@@ -236,6 +264,7 @@
     const hint = sameSign
       ? `Beide Zahlen haben das gleiche Vorzeichen (${a < 0 ? 'Minus und Minus' : 'Plus und Plus'}). Gleiche Vorzeichen ergeben im Ergebnis immer PLUS (+)!`
       : `Die Zahlen haben unterschiedliche Vorzeichen (Plus und Minus). Ungleiche Vorzeichen ergeben im Ergebnis immer MINUS (−)!`;
+    const explanation = `${sameSign ? 'Gleiche Vorzeichen ergeben Plus (+)' : 'Ungleiche Vorzeichen ergeben Minus (−)'}: ${signedHTML(a)} ${op} ${signedHTML(b)} = ${answer}.`;
 
     return {
       category: CATEGORIES.SIGNED_MUL_DIV,
@@ -244,6 +273,7 @@
       answer,
       displayAnswerHTML: `${answer}`,
       hint,
+      explanation,
       raw: { a, b, op }
     };
   }
@@ -253,7 +283,7 @@
   // =========================================================================
   function generateBracketsOrder(difficulty = 'normal') {
     const pattern = difficulty === 'easy' ? randInt(1, 2) : randInt(1, 4);
-    let promptHTML, answer, hint;
+    let promptHTML, answer, hint, explanation;
 
     if (pattern === 1) {
       // (a - b) * (c - d)
@@ -266,6 +296,7 @@
       answer = left * right;
       promptHTML = `(${a} − ${b}) <span class="op">·</span> (${c < 0 ? c : c} − ${d}) <span class="eq">=</span>`;
       hint = `Rechne zuerst beide Klammern getrennt aus: (${a} − ${b} = ${left}) und (${c} − ${d} = ${right}). Multipliziere dann beide Ergebnisse.`;
+      explanation = `Klammern zuerst: (${a} − ${b}) = ${left} und (${c} − ${d}) = ${right}. Danach: ${left} · (${right}) = ${answer}.`;
     } else if (pattern === 2) {
       // a - (b + c) * d
       const b = randInt(-10, -2);
@@ -276,6 +307,7 @@
       answer = a - bracketVal * d;
       promptHTML = `${a} − (${b} + ${c}) <span class="op">·</span> ${d} <span class="eq">=</span>`;
       hint = `Klammer zuerst! Rechne (${b} + ${c} = ${bracketVal}). Dann Punkt-vor-Strich: erst mit ${d} malnehmen, danach von ${a} abziehen.`;
+      explanation = `Klammer zuerst: (${b} + ${c}) = ${bracketVal}. Punkt-vor-Strich: ${bracketVal} · ${d} = ${bracketVal * d}. Zuletzt: ${a} − (${bracketVal * d}) = ${answer}.`;
     } else if (pattern === 3) {
       // (-x + y) : (-z) + w  (Division geht garantiert auf!)
       const divisor = randInt(2, 8) * -1;
@@ -288,6 +320,7 @@
       const xStr = x < 0 ? `${x}` : `${x}`;
       promptHTML = `(${xStr} + ${y}) <span class="op">:</span> (${divisor}) + ${w} <span class="eq">=</span>`;
       hint = `Berechne zuerst die erste Klammer (${x} + ${y} = ${dividend}). Teile dann durch (${divisor}) und addiere am Ende ${w}.`;
+      explanation = `Klammer zuerst: (${x} + ${y}) = ${dividend}. Punkt-vor-Strich: ${dividend} : (${divisor}) = ${quotient}. Zuletzt: ${quotient} + ${w} = ${answer}.`;
     } else {
       // a + b * (c - d)
       const a = randInt(-12, 18);
@@ -298,6 +331,7 @@
       answer = a + b * bracketVal;
       promptHTML = `${a} + ${b} <span class="op">·</span> (${c} − ${d}) <span class="eq">=</span>`;
       hint = `Zuerst die Klammer (${c} − ${d} = ${bracketVal}), dann Punkt-vor-Strich (${b} · ${bracketVal}), und erst zum Schluss ${a} addieren.`;
+      explanation = `Klammer zuerst: (${c} − ${d}) = ${bracketVal}. Punkt-vor-Strich: ${b} · (${bracketVal}) = ${b * bracketVal}. Zuletzt: ${a} + (${b * bracketVal}) = ${answer}.`;
     }
 
     return {
@@ -307,6 +341,7 @@
       answer,
       displayAnswerHTML: `${answer}`,
       hint,
+      explanation,
       raw: { pattern }
     };
   }
@@ -345,7 +380,179 @@
       answer: { num: baseNum, den: baseDen },
       displayAnswerHTML: fracHTML(baseNum, baseDen),
       hint: `Schau, durch welche Zahl sowohl ${num} als auch ${den} teilbar sind – zum Beispiel durch ${smallDiv}. Kürze dann weiter, bis nichts mehr geht!`,
+      explanation: `Zähler und Nenner durch ${mult} teilen: (${num} : ${mult}) über (${den} : ${mult}) = ${baseNum}/${baseDen}.`,
       raw: { num, den, baseNum, baseDen, mult }
+    };
+  }
+
+  // =========================================================================
+  // 5b. Dezimalzahlen: Grundrechenarten (+, −, ·, :)
+  // =========================================================================
+  function generateDecimalsOps(difficulty = 'normal') {
+    const op = pick(['+', '-', '·', ':']);
+
+    if (op === '+' || op === '-') {
+      const scaleA = difficulty === 'easy' ? 10 : pick([10, 100]);
+      const scaleB = difficulty === 'easy' ? 10 : (scaleA === 10 ? 100 : pick([10, 100]));
+      let a = randInt(11, difficulty === 'easy' ? 89 : 199) / scaleA;
+      let b = randInt(11, difficulty === 'easy' ? 79 : 149) / scaleB;
+      if (op === '-' && a <= b) {
+        a = roundTo(b + randInt(5, 45) / 10, 2);
+      }
+      const ans = roundTo(op === '+' ? a + b : a - b, 2);
+      const opSymbol = op === '+' ? '+' : '−';
+      const hint = op === '+'
+        ? 'Schreibe Komma unter Komma! Fülle fehlende Nachkommastellen gedanklich mit einer 0 auf.'
+        : 'Schreibe Komma unter Komma und ergänze bei Bedarf eine 0 am Ende (z. B. 5,2 = 5,20).';
+      return {
+        category: CATEGORIES.DECIMALS_OPS,
+        inputType: 'decimal',
+        unitLabel: '',
+        promptHTML: `${formatDE(a)} ${opSymbol} ${formatDE(b)} <span class="eq">=</span>`,
+        answer: ans,
+        displayAnswerHTML: formatDE(ans),
+        hint,
+        explanation: `Komma unter Komma gerechnet: ${formatDE(a)} ${opSymbol} ${formatDE(b)} = ${formatDE(ans)}.`,
+        raw: { a, b, op }
+      };
+    }
+
+    if (op === '·') {
+      let a, b, hint;
+      if (difficulty === 'easy') {
+        a = randInt(11, 49) / 10;
+        b = pick([2, 3, 4, 5, 10]);
+        hint = b === 10
+          ? 'Bei · 10 wandert das Komma um 1 Stelle nach rechts!'
+          : 'Rechne zuerst ohne Komma und setze im Ergebnis genauso viele Nachkommastellen.';
+      } else {
+        const variant = randInt(1, 3);
+        if (variant === 1) {
+          // Zehnerpotenz
+          a = randInt(12, 485) / 100;
+          b = pick([10, 100]);
+          hint = `Bei · ${b} wandert das Komma um ${b === 10 ? 1 : 2} ${b === 10 ? 'Stelle' : 'Stellen'} nach rechts.`;
+        } else if (variant === 2) {
+          // Dezimalzahl · natürliche Zahl
+          a = randInt(12, 65) / 10;
+          b = randInt(2, 9);
+          hint = 'Rechne zuerst ohne Komma und setze dann im Ergebnis genauso viele Nachkommastellen wie bei der ersten Zahl.';
+        } else {
+          // Dezimalzahl · Dezimalzahl
+          a = randInt(2, 19) / 10;
+          b = randInt(2, 9) / 10;
+          hint = 'Rechne zuerst ohne Komma! Das Ergebnis bekommt so viele Nachkommastellen, wie beide Faktoren zusammen haben.';
+        }
+      }
+      const ans = roundTo(a * b, 4);
+      return {
+        category: CATEGORIES.DECIMALS_OPS,
+        inputType: 'decimal',
+        unitLabel: '',
+        promptHTML: `${formatDE(a)} · ${formatDE(b)} <span class="eq">=</span>`,
+        answer: ans,
+        displayAnswerHTML: formatDE(ans),
+        hint,
+        explanation: `Rechnung: ${formatDE(a)} · ${formatDE(b)} = ${formatDE(ans)}.`,
+        raw: { a, b, op: '·' }
+      };
+    }
+
+    // Division (:) – immer exakt aufgehend konstruiert
+    let a, b, ans, hint;
+    if (difficulty === 'easy') {
+      b = randInt(2, 6);
+      ans = randInt(2, 24) / 10;
+      a = roundTo(ans * b, 2);
+      hint = 'Teile wie gewohnt. Sobald du beim Rechnen das Komma überschreitest, setzt du im Ergebnis ein Komma!';
+    } else {
+      const variant = randInt(1, 3);
+      if (variant === 1) {
+        // Teilen durch 10 oder 100
+        b = pick([10, 100]);
+        ans = randInt(12, 495) / 100;
+        a = roundTo(ans * b, 4);
+        hint = `Bei : ${b} wandert das Komma um ${b === 10 ? 1 : 2} ${b === 10 ? 'Stelle' : 'Stellen'} nach links.`;
+      } else if (variant === 2) {
+        // Dezimalzahl : natürliche Zahl
+        b = randInt(2, 8);
+        ans = randInt(11, 95) / (Math.random() < 0.5 ? 10 : 100);
+        a = roundTo(ans * b, 4);
+        hint = 'Sobald du beim schriftlichen Teilen das Komma überschreitest, setzt du auch im Ergebnis das Komma.';
+      } else {
+        // Kommaverschiebung: Dezimalzahl : Dezimalzahl
+        b = randInt(2, 9) / 10;
+        ans = randInt(2, 18) / (Math.random() < 0.5 ? 1 : 10);
+        a = roundTo(ans * b, 4);
+        hint = 'Verschiebe bei beiden Zahlen das Komma um gleich viele Stellen nach rechts, bis der Divisor eine ganze Zahl ist!';
+      }
+    }
+    return {
+      category: CATEGORIES.DECIMALS_OPS,
+      inputType: 'decimal',
+      unitLabel: '',
+      promptHTML: `${formatDE(a)} : ${formatDE(b)} <span class="eq">=</span>`,
+      answer: roundTo(ans, 4),
+      displayAnswerHTML: formatDE(ans),
+      hint,
+      explanation: `Rechnung: ${formatDE(a)} : ${formatDE(b)} = ${formatDE(ans)}.`,
+      raw: { a, b, op: ':' }
+    };
+  }
+
+  // =========================================================================
+  // 5c. Brüche <-> Dezimalzahlen umwandeln
+  // =========================================================================
+  function generateDecimalsConvert(difficulty = 'normal') {
+    const toDecimal = Math.random() < 0.5;
+
+    if (toDecimal) {
+      const dens = difficulty === 'easy'
+        ? [2, 4, 5, 10]
+        : [2, 4, 5, 8, 10, 20, 25, 50];
+      const den = pick(dens);
+      const rawNum = randInt(1, den - 1);
+      const s = simplify(rawNum, den);
+      const ans = roundTo(s.num / s.den, 4);
+      return {
+        category: CATEGORIES.DECIMALS_CONVERT,
+        inputType: 'decimal',
+        unitLabel: '',
+        promptHTML: `Wandle den Bruch in eine Dezimalzahl um:<br>${fracHTML(s.num, s.den)} <span class="eq">=</span>`,
+        answer: ans,
+        displayAnswerHTML: formatDE(ans),
+        hint: 'Erweitere den Bruch auf Zehntel (10), Hundertstel (100) oder Tausendstel (1000) – oder teile Zähler durch Nenner!',
+        explanation: `${s.num} : ${s.den} = ${formatDE(ans)}.`,
+        raw: { direction: 'toDecimal', num: s.num, den: s.den }
+      };
+    }
+
+    // Dezimalzahl -> vollständig gekürzter Bruch
+    const easyDecimals = [
+      { num: 1, den: 2 }, { num: 1, den: 4 }, { num: 3, den: 4 },
+      { num: 1, den: 5 }, { num: 2, den: 5 }, { num: 3, den: 5 }, { num: 4, den: 5 },
+      { num: 1, den: 10 }, { num: 3, den: 10 }, { num: 7, den: 10 }, { num: 9, den: 10 }
+    ];
+    const normalDecimals = [
+      ...easyDecimals,
+      { num: 1, den: 8 }, { num: 3, den: 8 }, { num: 5, den: 8 }, { num: 7, den: 8 },
+      { num: 3, den: 20 }, { num: 7, den: 20 }, { num: 9, den: 20 },
+      { num: 1, den: 25 }, { num: 3, den: 25 }, { num: 6, den: 25 }, { num: 12, den: 25 },
+      { num: 5, den: 4 }, { num: 3, den: 2 }, { num: 7, den: 5 }
+    ];
+    const chosen = pick(difficulty === 'easy' ? easyDecimals : normalDecimals);
+    const decVal = roundTo(chosen.num / chosen.den, 4);
+
+    return {
+      category: CATEGORIES.DECIMALS_CONVERT,
+      inputType: 'fraction',
+      allowUnreduced: false,
+      promptHTML: `Wandle die Dezimalzahl in einen vollständig gekürzten Bruch um:<br><strong>${formatDE(decVal)}</strong> <span class="eq">=</span>`,
+      answer: { num: chosen.num, den: chosen.den },
+      displayAnswerHTML: fracHTML(chosen.num, chosen.den),
+      hint: 'Lies die Nachkommastellen als Zehntel (10), Hundertstel (100) oder Tausendstel (1000) ab und kürze den Bruch danach vollständig!',
+      explanation: `${formatDE(decVal)} entspricht vollständig gekürzt ${chosen.num}/${chosen.den}.`,
+      raw: { direction: 'toFraction', decVal, baseNum: chosen.num, baseDen: chosen.den }
     };
   }
 
@@ -358,7 +565,9 @@
       CATEGORIES.FRACTIONS_UNITS,
       CATEGORIES.SIGNED_MUL_DIV,
       CATEGORIES.BRACKETS_ORDER,
-      CATEGORIES.FRACTIONS_REDUCE
+      CATEGORIES.FRACTIONS_REDUCE,
+      CATEGORIES.DECIMALS_OPS,
+      CATEGORIES.DECIMALS_CONVERT
     ]);
 
     if (subType === CATEGORIES.FRACTIONS_OPS) {
@@ -548,6 +757,81 @@
       }
     }
 
+    if (subType === CATEGORIES.DECIMALS_OPS) {
+      const variant = randInt(1, 3);
+      if (variant === 1) {
+        const p1 = randInt(120, 680) / 100;
+        const p2 = randInt(150, 790) / 100;
+        const ans = roundTo(p1 + p2, 2);
+        return {
+          category: CATEGORIES.WORD_PROBLEMS,
+          subCategory: CATEGORIES.DECIMALS_OPS,
+          inputType: 'decimal',
+          unitLabel: '€',
+          promptHTML: `Im Reitladen in Silverglade kauft Lisa Hufkratzer für ${formatDE(p1)} € und eine Mähnenbürste für ${formatDE(p2)} €. Wie viel Euro muss sie bezahlen?`,
+          answer: ans,
+          displayAnswerHTML: `${formatDE(ans)} €`,
+          hint: 'Addiere beide Preise – achte darauf, Komma unter Komma zu schreiben!',
+          explanation: `Rechnung: ${formatDE(p1)} + ${formatDE(p2)} = ${formatDE(ans)} €.`,
+          raw: { a: p1, b: p2, op: '+' }
+        };
+      }
+      if (variant === 2) {
+        const total = randInt(45, 95) / 10;
+        const done = randInt(125, Math.floor(total * 100) - 50) / 100;
+        const ans = roundTo(total - done, 2);
+        return {
+          category: CATEGORIES.WORD_PROBLEMS,
+          subCategory: CATEGORIES.DECIMALS_OPS,
+          inputType: 'decimal',
+          unitLabel: 'km',
+          promptHTML: `Die Reitstrecke durch Valedale ist ${formatDE(total)} km lang. Maya ist bereits ${formatDE(done)} km geritten. Wie viele Kilometer fehlen ihr noch?`,
+          answer: ans,
+          displayAnswerHTML: `${formatDE(ans)} km`,
+          hint: 'Ziehe die bereits gerittene Strecke von der Gesamtstrecke ab (Komma unter Komma).',
+          explanation: `Rechnung: ${formatDE(total)} − ${formatDE(done)} = ${formatDE(ans)} km.`,
+          raw: { a: total, b: done, op: '-' }
+        };
+      }
+      const weight = randInt(11, 35) / 10;
+      const count = randInt(3, difficulty === 'easy' ? 5 : 8);
+      const ans = roundTo(weight * count, 2);
+      return {
+        category: CATEGORIES.WORD_PROBLEMS,
+        subCategory: CATEGORIES.DECIMALS_OPS,
+        inputType: 'decimal',
+        unitLabel: 'kg',
+        promptHTML: `Ein Sack Pferdeleckerlis wiegt ${formatDE(weight)} kg. Für das Turnier kauft der Stall ${count} Säcke. Wie viele Kilogramm sind das insgesamt?`,
+        answer: ans,
+        displayAnswerHTML: `${formatDE(ans)} kg`,
+        hint: `Multipliziere ${formatDE(weight)} mit ${count}. Das Ergebnis hat wieder eine Nachkommastelle.`,
+        explanation: `Rechnung: ${formatDE(weight)} · ${count} = ${formatDE(ans)} kg.`,
+        raw: { a: weight, b: count, op: '·' }
+      };
+    }
+
+    if (subType === CATEGORIES.DECIMALS_CONVERT) {
+      const pairs = [
+        { num: 1, den: 2 }, { num: 1, den: 4 }, { num: 3, den: 4 },
+        { num: 1, den: 5 }, { num: 2, den: 5 }, { num: 3, den: 5 }, { num: 4, den: 5 },
+        { num: 1, den: 8 }, { num: 3, den: 8 }
+      ];
+      const chosen = pick(pairs);
+      const decVal = roundTo(chosen.num / chosen.den, 4);
+      return {
+        category: CATEGORIES.WORD_PROBLEMS,
+        subCategory: CATEGORIES.DECIMALS_CONVERT,
+        inputType: 'fraction',
+        allowUnreduced: false,
+        promptHTML: `Für ein Rezept für Pferde-Kekse braucht man ${formatDE(decVal)} kg Haferflocken. Wie viel Kilogramm sind das als vollständig gekürzter Bruch?`,
+        answer: { num: chosen.num, den: chosen.den },
+        displayAnswerHTML: fracHTML(chosen.num, chosen.den),
+        hint: 'Schreibe die Dezimalzahl als Zehntel, Hundertstel oder Tausendstel und kürze dann vollständig!',
+        explanation: `${formatDE(decVal)} entspricht gekürzt ${chosen.num}/${chosen.den}.`,
+        raw: { direction: 'toFraction', decVal, baseNum: chosen.num, baseDen: chosen.den }
+      };
+    }
+
     // FRACTIONS_REDUCE als Textaufgabe
     const basePairs = [[1, 2], [1, 3], [2, 3], [1, 4], [3, 4], [2, 5], [3, 5], [4, 5], [5, 6]];
     const [baseNum, baseDen] = pick(basePairs);
@@ -587,6 +871,8 @@
       case CATEGORIES.SIGNED_MUL_DIV: return generateSignedMulDiv(difficulty);
       case CATEGORIES.BRACKETS_ORDER: return generateBracketsOrder(difficulty);
       case CATEGORIES.FRACTIONS_REDUCE: return generateFractionReduce(difficulty);
+      case CATEGORIES.DECIMALS_OPS: return generateDecimalsOps(difficulty);
+      case CATEGORIES.DECIMALS_CONVERT: return generateDecimalsConvert(difficulty);
       case CATEGORIES.WORD_PROBLEMS: return generateWordProblem(difficulty);
       default: return generateFractionOps(difficulty);
     }
@@ -603,9 +889,17 @@
       return val === task.answer ? { status: 'correct' } : { status: 'wrong' };
     }
 
-    // Bruch-Eingabe
-    const uNum = parseInt(String(userInput.num).trim(), 10);
-    const uDen = parseInt(String(userInput.den).trim(), 10);
+    if (task.inputType === 'decimal') {
+      const val = parseDecimalInput(userInput.value);
+      if (Number.isNaN(val)) return { status: 'invalid' };
+      return Math.abs(val - task.answer) < 1e-9 ? { status: 'correct' } : { status: 'wrong' };
+    }
+
+    // Bruch-Eingabe (leerer Nenner wird bei ganzzahligem Zähler als 1 gewertet)
+    const rawNum = String(userInput.num ?? '').trim();
+    const rawDen = String(userInput.den ?? '').trim();
+    const uNum = parseInt(rawNum, 10);
+    const uDen = rawDen === '' && rawNum !== '' ? 1 : parseInt(rawDen, 10);
     if (Number.isNaN(uNum) || Number.isNaN(uDen) || uDen === 0) {
       return { status: 'invalid' };
     }
@@ -757,6 +1051,65 @@
           lukasComment: pick(LUKAS_COMMENTS_FIXED)
         };
       }
+    }
+
+    if (cat === CATEGORIES.DECIMALS_OPS) {
+      const { op } = task.raw;
+      let wrongAns = roundTo(task.answer * 10, 4);
+      if (Math.abs(wrongAns - task.answer) < 1e-9) {
+        wrongAns = roundTo(task.answer + 0.1, 4);
+      }
+      let reason = 'Komma falsch gesetzt!';
+      if (op === '·') reason = 'Nachkommastellen beim Malnehmen verzählt!';
+      if (op === ':') reason = 'Komma beim Teilen vergessen!';
+      const unitSuffix = task.unitLabel ? ` ${task.unitLabel}` : '';
+      return {
+        lukasAnswerHTML: `${formatDE(wrongAns)}${unitSuffix}`,
+        isCorrect: false,
+        mistakeReason: reason,
+        reasonOptions: [
+          'Komma falsch gesetzt!',
+          'Nachkommastellen beim Malnehmen verzählt!',
+          'Komma beim Teilen vergessen!',
+          'Vorzeichen-Falle!'
+        ],
+        lukasComment: pick(LUKAS_COMMENTS_FIXED)
+      };
+    }
+
+    if (cat === CATEGORIES.DECIMALS_CONVERT) {
+      if (task.inputType === 'decimal') {
+        const { num, den } = task.raw;
+        let wrongVal = parseFloat(`0.${num}${den}`);
+        if (Number.isNaN(wrongVal) || Math.abs(wrongVal - task.answer) < 1e-9) {
+          wrongVal = roundTo(task.answer * 10, 4);
+        }
+        return {
+          lukasAnswerHTML: formatDE(wrongVal),
+          isCorrect: false,
+          mistakeReason: 'Zähler und Nenner einfach hinter das Komma geschrieben!',
+          reasonOptions: [
+            'Zähler und Nenner einfach hinter das Komma geschrieben!',
+            'Komma falsch gesetzt!',
+            'Nicht vollständig gekürzt!',
+            'Vorzeichen-Falle!'
+          ],
+          lukasComment: pick(LUKAS_COMMENTS_FIXED)
+        };
+      }
+      const { baseNum, baseDen } = task.raw;
+      return {
+        lukasAnswerHTML: fracHTML(baseNum * 2, baseDen * 2),
+        isCorrect: false,
+        mistakeReason: 'Nicht vollständig gekürzt!',
+        reasonOptions: [
+          'Nicht vollständig gekürzt!',
+          'Zähler und Nenner einfach hinter das Komma geschrieben!',
+          'Komma falsch gesetzt!',
+          'Nur den Zähler gekürzt!'
+        ],
+        lukasComment: pick(LUKAS_COMMENTS_FIXED)
+      };
     }
 
     // BRACKETS_ORDER

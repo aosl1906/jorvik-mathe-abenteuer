@@ -11,6 +11,20 @@ window.Scratchpad = (function () {
     let drawing = false;
     let currentColor = '#2c221e';
     let isEraser = false;
+    let activePointerId = null;
+    let lastPenTime = 0;
+
+    function applyStrokeStyle(e) {
+      ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+      ctx.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : currentColor;
+      if (isEraser) {
+        ctx.lineWidth = 18;
+      } else {
+        ctx.lineWidth = (e && e.pointerType === 'pen' && e.pressure > 0)
+          ? 1.8 + e.pressure * 2.2
+          : 2.6;
+      }
+    }
 
     function resizeCanvas() {
       const rect = canvasEl.getBoundingClientRect();
@@ -40,31 +54,43 @@ window.Scratchpad = (function () {
     }
 
     function startDraw(e) {
+      if (e.pointerType === 'pen') {
+        lastPenTime = Date.now();
+      } else if (e.pointerType === 'touch' && Date.now() - lastPenTime < 600) {
+        return;
+      }
+      if (activePointerId !== null && activePointerId !== e.pointerId) return;
+
       e.preventDefault();
       if (window.getSelection) {
         const sel = window.getSelection();
         if (sel && sel.removeAllRanges) sel.removeAllRanges();
       }
       drawing = true;
+      activePointerId = e.pointerId;
       const pos = getPos(e);
       ctx.beginPath();
       ctx.moveTo(pos.x, pos.y);
+      applyStrokeStyle(e);
+      ctx.lineTo(pos.x + 0.1, pos.y + 0.1);
+      ctx.stroke();
       canvasEl.setPointerCapture(e.pointerId);
     }
 
     function moveDraw(e) {
-      if (!drawing) return;
+      if (!drawing || e.pointerId !== activePointerId) return;
+      if (e.pointerType === 'pen') lastPenTime = Date.now();
       e.preventDefault();
       const pos = getPos(e);
-      ctx.strokeStyle = isEraser ? '#fdf8ec' : currentColor;
-      ctx.lineWidth = isEraser ? 16 : 2.6;
+      applyStrokeStyle(e);
       ctx.lineTo(pos.x, pos.y);
       ctx.stroke();
     }
 
     function endDraw(e) {
-      if (!drawing) return;
+      if (!drawing || (e && e.pointerId !== activePointerId)) return;
       drawing = false;
+      activePointerId = null;
       ctx.closePath();
       if (e && canvasEl.hasPointerCapture && canvasEl.hasPointerCapture(e.pointerId)) {
         canvasEl.releasePointerCapture(e.pointerId);
@@ -73,7 +99,10 @@ window.Scratchpad = (function () {
 
     function clear() {
       const rect = canvasEl.getBoundingClientRect();
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
       ctx.clearRect(0, 0, rect.width, rect.height);
+      ctx.restore();
     }
 
     canvasEl.addEventListener('pointerdown', startDraw);

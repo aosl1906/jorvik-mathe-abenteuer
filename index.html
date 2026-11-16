@@ -44,13 +44,22 @@
       </div>
     </div>
 
-    <!-- Themen-Auswahl (Filter) -->
+    <!-- Themen-Auswahl (Kompakt & Ausklappbar) -->
     <div class="topic-bar">
       <div class="topic-bar-inner">
-        <span class="topic-bar-label">Themen:</span>
-        <div id="topicFilters" class="topic-pills"></div>
+        <button type="button" id="topicToggleBtn" class="topic-toggle-btn" aria-expanded="false" aria-controls="topicDrawer">
+          <span>📚</span>
+          <span id="topicSummaryText" class="topic-summary-text">Themen: Alle</span>
+          <span class="topic-chevron" aria-hidden="true">▾</span>
+        </button>
         <div id="shieldStatus" class="shield-badge" title="Anti-Leichtsinns-Schutzschild">
           🛡️ Schutzschild aktiv
+        </div>
+      </div>
+      <div id="topicDrawer" class="topic-drawer hidden">
+        <div class="topic-drawer-inner">
+          <div id="topicFilters" class="topic-pills"></div>
+          <button type="button" id="topicSelectAllBtn" class="topic-all-btn" title="Alle Themen aktivieren">Alle</button>
         </div>
       </div>
     </div>
@@ -113,9 +122,9 @@
             <div id="taskPrompt" class="task-prompt"></div>
 
             <form id="taskForm" class="task-form" autocomplete="off">
-              <!-- Ganzzahl-Eingabe -->
+              <!-- Ganzzahl- & Dezimal-Eingabe -->
               <div id="integerInputWrap" class="input-wrap hidden">
-                <input id="integerInput" type="number" inputmode="numeric" class="math-input" placeholder="?" aria-label="Antwort eingeben" />
+                <input id="integerInput" type="text" inputmode="numeric" class="math-input" placeholder="?" aria-label="Antwort eingeben" />
                 <span id="integerUnitLabel" class="unit-tag"></span>
                 <button type="button" id="clearIntegerBtn" class="btn-clear-input" title="Eingabe löschen" aria-label="Eingabe löschen">✕</button>
               </div>
@@ -123,11 +132,29 @@
               <!-- Bruch-Eingabe (Zähler / Nenner) -->
               <div id="fractionInputWrap" class="input-wrap hidden">
                 <div class="frac-input-box">
-                  <input id="numInput" type="number" inputmode="numeric" class="math-input frac-field" placeholder="Zähler" aria-label="Zähler" />
+                  <input id="numInput" type="text" inputmode="numeric" class="math-input frac-field" placeholder="Zähler" aria-label="Zähler" />
                   <div class="frac-input-bar"></div>
-                  <input id="denInput" type="number" inputmode="numeric" class="math-input frac-field" placeholder="Nenner" aria-label="Nenner" />
+                  <input id="denInput" type="text" inputmode="numeric" class="math-input frac-field" placeholder="Nenner" aria-label="Nenner" />
                 </div>
                 <button type="button" id="clearFractionBtn" class="btn-clear-input" title="Bruch-Eingabe löschen" aria-label="Bruch-Eingabe löschen">✕</button>
+              </div>
+
+              <!-- iPad & Apple Pencil Ziffernblock -->
+              <div id="pencilNumpad" class="pencil-numpad" aria-label="Ziffernblock für Stift und Touch">
+                <button type="button" class="numpad-btn" data-key="1">1</button>
+                <button type="button" class="numpad-btn" data-key="2">2</button>
+                <button type="button" class="numpad-btn" data-key="3">3</button>
+                <button type="button" class="numpad-btn" data-key="4">4</button>
+                <button type="button" class="numpad-btn" data-key="5">5</button>
+                <button type="button" class="numpad-btn" data-key="6">6</button>
+                <button type="button" class="numpad-btn" data-key="7">7</button>
+                <button type="button" class="numpad-btn" data-key="8">8</button>
+                <button type="button" class="numpad-btn" data-key="9">9</button>
+                <button type="button" class="numpad-btn" data-key="0">0</button>
+                <button type="button" class="numpad-btn numpad-op" data-key=",">,</button>
+                <button type="button" class="numpad-btn numpad-op" data-key="-">−</button>
+                <button type="button" class="numpad-btn numpad-back" data-key="backspace" title="Letzte Ziffer löschen" aria-label="Rückschritt">⌫</button>
+                <button type="button" id="switchFracFieldBtn" class="numpad-btn numpad-switch hidden" title="Zwischen Zähler und Nenner wechseln">Zähler ⇅ Nenner</button>
               </div>
 
               <div class="task-actions">

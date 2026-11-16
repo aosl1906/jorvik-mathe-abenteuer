@@ -14,6 +14,9 @@
   };
 
   const QUEST_DURATION_SEC = 20 * 60; // 20:00 Minuten
+  const isCoarsePointer = () => window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  let scratchpad = null;
+  let activeInputEl = null;
 
   // =========================================================================
   // Zustand
@@ -84,7 +87,11 @@
     muteBtn: document.getElementById('muteBtn'),
     modeTabs: document.querySelectorAll('.mode-tab'),
     modeSections: document.querySelectorAll('.mode-section'),
+    topicToggleBtn: document.getElementById('topicToggleBtn'),
+    topicSummaryText: document.getElementById('topicSummaryText'),
+    topicDrawer: document.getElementById('topicDrawer'),
     topicFilters: document.getElementById('topicFilters'),
+    topicSelectAllBtn: document.getElementById('topicSelectAllBtn'),
     shieldStatus: document.getElementById('shieldStatus'),
     vaultCountBadge: document.getElementById('vaultCountBadge'),
 
@@ -114,6 +121,8 @@
     numInput: document.getElementById('numInput'),
     denInput: document.getElementById('denInput'),
     clearFractionBtn: document.getElementById('clearFractionBtn'),
+    pencilNumpad: document.getElementById('pencilNumpad'),
+    switchFracFieldBtn: document.getElementById('switchFracFieldBtn'),
     submitAnswerBtn: document.getElementById('submitAnswerBtn'),
     hintBtn: document.getElementById('hintBtn'),
     hintBox: document.getElementById('hintBox'),
@@ -186,7 +195,8 @@
   // =========================================================================
   function renderTopicFilters() {
     els.topicFilters.innerHTML = '';
-    Object.entries(MG.CATEGORY_LABELS).forEach(([key, label]) => {
+    const entries = Object.entries(MG.CATEGORY_LABELS);
+    entries.forEach(([key, label]) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       const active = state.activeTopics.includes(key);
@@ -208,6 +218,19 @@
       });
       els.topicFilters.appendChild(btn);
     });
+
+    if (els.topicSummaryText) {
+      const total = entries.length;
+      const activeCount = state.activeTopics.length;
+      if (activeCount === total) {
+        els.topicSummaryText.textContent = `Themen: Alle (${total}/${total})`;
+      } else {
+        const names = entries
+          .filter(([k]) => state.activeTopics.includes(k))
+          .map(([, label]) => label);
+        els.topicSummaryText.textContent = `Themen (${activeCount}/${total}): ${names.join(', ')}`;
+      }
+    }
   }
 
   function updateMuteUI() {
@@ -334,12 +357,22 @@
     }
   }
 
+  function setActiveNumpadTarget(el) {
+    activeInputEl = el;
+    els.numInput.classList.toggle('active-target', el === els.numInput);
+    els.denInput.classList.toggle('active-target', el === els.denInput);
+  }
+
   function loadNextPuzzleTask() {
     const diff = state.easyTasksRemaining > 0 ? 'easy' : 'normal';
     state.currentTask = MG.generateTask(state.activeTopics, diff);
     state.taskShownAt = Date.now();
     state.taskAttempts = 0;
     state.taskLocked = false;
+
+    if (scratchpad) {
+      scratchpad.clear();
+    }
 
     els.taskCategoryBadge.textContent = MG.CATEGORY_LABELS[state.currentTask.category] || 'Mathe';
     els.taskPrompt.innerHTML = state.currentTask.promptHTML;
@@ -357,15 +390,27 @@
     els.denInput.disabled = false;
     els.submitAnswerBtn.disabled = false;
 
-    if (state.currentTask.inputType === 'integer') {
+    const coarse = isCoarsePointer();
+    const isScalar = state.currentTask.inputType === 'integer' || state.currentTask.inputType === 'decimal';
+    if (isScalar) {
+      const isDecimal = state.currentTask.inputType === 'decimal';
+      els.integerInput.type = 'text';
+      els.integerInput.inputMode = coarse ? 'none' : (isDecimal ? 'decimal' : 'numeric');
+      els.integerInput.placeholder = isDecimal ? 'z.B. 2,5' : '?';
       els.integerInputWrap.classList.remove('hidden');
       els.fractionInputWrap.classList.add('hidden');
+      if (els.switchFracFieldBtn) els.switchFracFieldBtn.classList.add('hidden');
       els.integerUnitLabel.textContent = state.currentTask.unitLabel || '';
-      setTimeout(() => els.integerInput.focus(), 30);
+      setActiveNumpadTarget(els.integerInput);
+      if (!coarse) setTimeout(() => els.integerInput.focus(), 30);
     } else {
+      els.numInput.inputMode = coarse ? 'none' : 'numeric';
+      els.denInput.inputMode = coarse ? 'none' : 'numeric';
       els.integerInputWrap.classList.add('hidden');
       els.fractionInputWrap.classList.remove('hidden');
-      setTimeout(() => els.numInput.focus(), 30);
+      if (els.switchFracFieldBtn) els.switchFracFieldBtn.classList.remove('hidden');
+      setActiveNumpadTarget(els.numInput);
+      if (!coarse) setTimeout(() => els.numInput.focus(), 30);
     }
 
     updateShieldBadge();
@@ -393,7 +438,8 @@
     }
 
     const elapsedMs = Date.now() - state.taskShownAt;
-    const userInput = state.currentTask.inputType === 'integer'
+    const isScalar = state.currentTask.inputType === 'integer' || state.currentTask.inputType === 'decimal';
+    const userInput = isScalar
       ? { value: els.integerInput.value }
       : { num: els.numInput.value, den: els.denInput.value };
 
@@ -430,11 +476,12 @@
       if (!state.puzzleCompleted) {
         shatterRandomTile();
       }
+      const delayMs = result.status === 'unreduced_ok' ? 2800 : 1150;
       setTimeout(() => {
         if (!state.puzzleCompleted) {
           loadNextPuzzleTask();
         }
-      }, 1150);
+      }, delayMs);
       return;
     }
 
@@ -564,11 +611,13 @@
         inputsRow.className = 'correction-inputs';
         inputsRow.innerHTML = '<strong>Deine Korrektur für Lukas:</strong>';
 
-        if (item.task.inputType === 'integer') {
+        if (item.task.inputType === 'integer' || item.task.inputType === 'decimal') {
+          const isDecimal = item.task.inputType === 'decimal';
           const inp = document.createElement('input');
-          inp.type = 'number';
+          inp.type = isDecimal ? 'text' : 'number';
+          if (isDecimal) inp.inputMode = 'decimal';
           inp.className = 'math-input';
-          inp.placeholder = 'Lösung';
+          inp.placeholder = isDecimal ? 'z.B. 2,5' : 'Lösung';
           inp.value = dec.val || '';
           inp.disabled = state.examGraded;
           inp.addEventListener('input', e => {
@@ -667,8 +716,12 @@
           });
           if (checkRes.status === 'correct' || checkRes.status === 'unreduced_ok') {
             pointEarned = true;
+            const reasonRight = dec.reason && dec.reason === item.mistakeReason;
+            const reasonNote = reasonRight
+              ? ' Auch den Fehlergrund hast du genau getroffen!'
+              : (dec.reason ? ` (Lukas’ eigentlicher Fehler war: ${item.mistakeReason})` : '');
             resDiv.className = 'exam-item-result good';
-            resDiv.innerHTML = `⭐ Adlerauge! Fehler gefunden &amp; richtig korrigiert! Lukas: <em>„${item.lukasComment}“</em>`;
+            resDiv.innerHTML = `⭐ Adlerauge! Fehler gefunden &amp; richtig korrigiert!${reasonNote} Lukas: <em>„${item.lukasComment}“</em>`;
           } else {
             resDiv.className = 'exam-item-result info';
             resDiv.innerHTML = `🖍️ Fehler super entdeckt! Die richtige Lösung lautet: ${item.task.displayAnswerHTML} (${item.mistakeReason}).`;
@@ -755,6 +808,35 @@
     });
   }
 
+  function compressImageFile(file, callback) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const maxSide = 900;
+        let { width, height } = img;
+        if (width > maxSide || height > maxSide) {
+          if (width >= height) {
+            height = Math.round((height * maxSide) / width);
+            width = maxSide;
+          } else {
+            width = Math.round((width * maxSide) / height);
+            height = maxSide;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        callback(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = () => callback(ev.target.result);
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
   // =========================================================================
   // Event-Listener & Initialisierung
   // =========================================================================
@@ -805,19 +887,17 @@
     els.customImageInput.addEventListener('change', e => {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
+      compressImageFile(file, dataUrl => {
         state.artworks.unshift({
           id: 'upload_' + Date.now(),
           title: file.name.replace(/\.[^.]+$/, ''),
           subtitle: 'Eigenes Jorvik-Bild',
-          src: ev.target.result
+          src: dataUrl
         });
         state.currentArtworkIndex = 0;
         populateArtworkSelect();
         initPuzzleBoard();
-      };
-      reader.readAsDataURL(file);
+      });
     });
 
     els.nextPuzzleBtn.addEventListener('click', () => {
@@ -832,13 +912,49 @@
     els.clearIntegerBtn.addEventListener('click', () => {
       if (state.taskLocked) return;
       els.integerInput.value = '';
+      setActiveNumpadTarget(els.integerInput);
     });
 
     els.clearFractionBtn.addEventListener('click', () => {
       if (state.taskLocked) return;
       els.numInput.value = '';
       els.denInput.value = '';
+      setActiveNumpadTarget(els.numInput);
     });
+
+    [els.integerInput, els.numInput, els.denInput].forEach(inp => {
+      inp.addEventListener('focus', () => setActiveNumpadTarget(inp));
+      inp.addEventListener('pointerdown', () => setActiveNumpadTarget(inp));
+    });
+
+    if (els.switchFracFieldBtn) {
+      els.switchFracFieldBtn.addEventListener('click', () => {
+        if (state.taskLocked) return;
+        const nextEl = activeInputEl === els.denInput ? els.numInput : els.denInput;
+        setActiveNumpadTarget(nextEl);
+        if (!isCoarsePointer()) nextEl.focus();
+      });
+    }
+
+    if (els.pencilNumpad) {
+      els.pencilNumpad.addEventListener('click', e => {
+        const btn = e.target.closest('.numpad-btn[data-key]');
+        if (!btn || state.taskLocked || !activeInputEl || activeInputEl.disabled) return;
+        const key = btn.dataset.key;
+        const val = activeInputEl.value;
+        if (key === 'backspace') {
+          activeInputEl.value = val.slice(0, -1);
+        } else if (key === '-') {
+          activeInputEl.value = val.startsWith('-') ? val.slice(1) : '-' + val;
+        } else if (key === ',') {
+          if (!val.includes(',') && !val.includes('.')) {
+            activeInputEl.value = val === '' || val === '-' ? val + '0,' : val + ',';
+          }
+        } else {
+          activeInputEl.value = val + key;
+        }
+      });
+    }
 
     els.nextTaskBtn.addEventListener('click', () => {
       loadNextPuzzleTask();
@@ -852,6 +968,22 @@
 
     els.newExamBtn.addEventListener('click', startNewLukasExam);
     els.gradeExamBtn.addEventListener('click', gradeLukasExam);
+
+    if (els.topicToggleBtn && els.topicDrawer) {
+      els.topicToggleBtn.addEventListener('click', () => {
+        const isOpen = !els.topicDrawer.classList.contains('hidden');
+        els.topicDrawer.classList.toggle('hidden', isOpen);
+        els.topicToggleBtn.setAttribute('aria-expanded', String(!isOpen));
+      });
+    }
+
+    if (els.topicSelectAllBtn) {
+      els.topicSelectAllBtn.addEventListener('click', () => {
+        state.activeTopics = Object.values(MG.CATEGORIES);
+        renderTopicFilters();
+        loadNextPuzzleTask();
+      });
+    }
   }
 
   function init() {
@@ -865,7 +997,7 @@
     bindEvents();
 
     // Schmierzettel initialisieren
-    window.Scratchpad.init(document.getElementById('scratchpadCanvas'), {
+    scratchpad = window.Scratchpad.init(document.getElementById('scratchpadCanvas'), {
       clearBtn: document.getElementById('clearScratchBtn'),
       colorButtons: document.querySelectorAll('.pen-btn')
     });
