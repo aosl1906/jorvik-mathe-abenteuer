@@ -19,6 +19,7 @@
     FRACTIONS_REDUCE: 'fractions_reduce',
     DECIMALS_OPS: 'decimals_ops',
     DECIMALS_CONVERT: 'decimals_convert',
+    UNITS_CONVERT: 'units_convert',
     WORD_PROBLEMS: 'word_problems'
   };
 
@@ -30,6 +31,7 @@
     fractions_reduce: 'Brüche kürzen',
     decimals_ops: 'Dezimalzahlen (+, −, ·, :)',
     decimals_convert: 'Brüche ↔ Dezimalzahlen',
+    units_convert: 'Einheiten umrechnen',
     word_problems: '📖 Textaufgaben'
   };
 
@@ -82,8 +84,14 @@
     return Math.round((n + Number.EPSILON) * f) / f;
   }
 
-  function formatDE(n) {
-    return String(roundTo(n, 4)).replace('.', ',');
+  function formatDE(n, decimals = 6) {
+    const rounded = roundTo(n, decimals);
+    if (rounded === 0) return '0';
+    let str = String(rounded);
+    if (/[eE]/.test(str)) {
+      str = rounded.toFixed(decimals).replace(/\.?0+$/, '');
+    }
+    return str.replace('.', ',');
   }
 
   function parseDecimalInput(raw) {
@@ -557,6 +565,257 @@
   }
 
   // =========================================================================
+  // 6b. Größen & Einheiten mit Dezimalzahlen umrechnen
+  //     (Strecken, Flächen inkl. a & ha, Gewicht, Zeiteinheiten)
+  // =========================================================================
+  const UNIT_CONVERT_DOMAINS = {
+    length: [
+      {
+        fromUnit: 'km', toUnit: 'm', factor: 1000, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.75, 1.2, 3, 0.05],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.75, 1.25, 2.05, 0.002, 0.005, 0.008, 0.015, 0.03, 0.075, 0.4, 0.125]
+      },
+      {
+        fromUnit: 'm', toUnit: 'km', factor: 1000, op: 'div',
+        easyVals: [500, 1500, 2500, 250, 750, 1200],
+        normalVals: [500, 1500, 2500, 250, 750, 1250, 1750, 2050, 40, 80, 120, 350, 650, 5, 25]
+      },
+      {
+        fromUnit: 'm', toUnit: 'dm', factor: 10, op: 'mul',
+        easyVals: [1.5, 2.5, 0.4, 0.7, 3.2, 0.5],
+        normalVals: [1.5, 2.5, 0.4, 0.7, 0.03, 0.05, 0.08, 0.12, 1.25, 2.75, 3.5]
+      },
+      {
+        fromUnit: 'dm', toUnit: 'm', factor: 10, op: 'div',
+        easyVals: [15, 25, 4, 8, 30, 5],
+        normalVals: [15, 25, 4, 8, 30, 5, 0.5, 2.5, 3.5, 12.5, 7, 18, 50, 250]
+      },
+      {
+        fromUnit: 'm', toUnit: 'cm', factor: 100, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.04, 0.05],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.003, 0.008, 0.012, 0.015, 0.04, 0.35, 1.25, 2.08]
+      },
+      {
+        fromUnit: 'cm', toUnit: 'm', factor: 100, op: 'div',
+        easyVals: [50, 150, 250, 25, 75, 40, 80],
+        normalVals: [50, 150, 250, 25, 75, 40, 80, 3, 8, 12, 35, 125, 208, 0.5, 1.5, 300]
+      },
+      {
+        fromUnit: 'dm', toUnit: 'cm', factor: 10, op: 'mul',
+        easyVals: [1.5, 2.5, 0.4, 0.7, 0.8],
+        normalVals: [1.5, 2.5, 0.4, 0.7, 0.03, 0.08, 0.125, 1.25, 3.5, 0.65, 2.4]
+      },
+      {
+        fromUnit: 'cm', toUnit: 'dm', factor: 10, op: 'div',
+        easyVals: [15, 25, 5, 8, 40],
+        normalVals: [15, 25, 5, 8, 40, 0.3, 1.5, 6.5, 12.5, 24, 35, 7]
+      },
+      {
+        fromUnit: 'cm', toUnit: 'mm', factor: 10, op: 'mul',
+        easyVals: [1.5, 2.5, 0.4, 0.7, 0.5],
+        normalVals: [1.5, 2.5, 0.4, 0.7, 0.03, 0.08, 0.15, 1.25, 3.5, 0.25]
+      },
+      {
+        fromUnit: 'mm', toUnit: 'cm', factor: 10, op: 'div',
+        easyVals: [15, 25, 4, 8, 30],
+        normalVals: [15, 25, 4, 8, 30, 0.5, 3, 6, 12.5, 35, 75, 18]
+      }
+    ],
+    area: [
+      {
+        fromUnit: 'km²', toUnit: 'ha', factor: 100, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.04, 0.05],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.004, 0.007, 0.015, 0.03, 0.35, 1.25, 0.008]
+      },
+      {
+        fromUnit: 'ha', toUnit: 'km²', factor: 100, op: 'div',
+        easyVals: [50, 150, 250, 25, 75, 40, 80],
+        normalVals: [50, 150, 250, 25, 75, 40, 80, 3, 12, 35, 125, 200, 500, 0.5]
+      },
+      {
+        fromUnit: 'ha', toUnit: 'a', factor: 100, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.04, 0.05],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.003, 0.009, 0.015, 0.03, 0.35, 1.25, 0.08]
+      },
+      {
+        fromUnit: 'a', toUnit: 'ha', factor: 100, op: 'div',
+        easyVals: [50, 150, 250, 25, 75, 40, 80],
+        normalVals: [50, 150, 250, 25, 75, 40, 80, 3, 12, 35, 125, 200, 500, 5, 0.5]
+      },
+      {
+        fromUnit: 'a', toUnit: 'm²', factor: 100, op: 'mul',
+        easyVals: [1, 5, 1.5, 2.5, 0.5, 0.25, 0.04, 0.05],
+        normalVals: [5, 1.5, 2.5, 0.5, 0.25, 0.002, 0.007, 0.015, 0.03, 0.35, 1.25, 4.5, 0.08]
+      },
+      {
+        fromUnit: 'm²', toUnit: 'a', factor: 100, op: 'div',
+        easyVals: [50, 150, 250, 25, 75, 200, 500],
+        normalVals: [50, 150, 250, 25, 75, 200, 500, 3, 12, 35, 125, 450, 80, 5, 0.5]
+      },
+      {
+        fromUnit: 'ha', toUnit: 'm²', factor: 10000, op: 'mul', twoStep: true,
+        easyVals: [0.5, 0.25],
+        normalVals: [0.03, 0.25, 0.5, 1.5, 0.005, 0.0004, 0.0007, 0.0015, 0.045, 0.08]
+      },
+      {
+        fromUnit: 'm²', toUnit: 'ha', factor: 10000, op: 'div', twoStep: true,
+        easyVals: [2500, 5000],
+        normalVals: [300, 2500, 5000, 15000, 50, 400, 7500, 12500, 800, 1200]
+      },
+      {
+        fromUnit: 'm²', toUnit: 'dm²', factor: 100, op: 'mul',
+        easyVals: [1.5, 2.5, 0.5, 0.25, 0.04, 0.05],
+        normalVals: [1.5, 2.5, 0.5, 0.25, 0.003, 0.008, 0.015, 0.03, 0.35, 1.25, 0.09]
+      },
+      {
+        fromUnit: 'dm²', toUnit: 'm²', factor: 100, op: 'div',
+        easyVals: [50, 150, 250, 25, 75, 40, 80],
+        normalVals: [50, 150, 250, 25, 75, 40, 80, 3, 12, 35, 125, 300, 0.5, 1.5]
+      },
+      {
+        fromUnit: 'dm²', toUnit: 'cm²', factor: 100, op: 'mul',
+        easyVals: [1.5, 2.5, 0.5, 0.25, 0.04, 0.05],
+        normalVals: [1.5, 2.5, 0.5, 0.25, 0.003, 0.007, 0.015, 0.03, 0.35, 1.25]
+      },
+      {
+        fromUnit: 'cm²', toUnit: 'dm²', factor: 100, op: 'div',
+        easyVals: [50, 150, 250, 25, 75, 40, 80],
+        normalVals: [50, 150, 250, 25, 75, 40, 80, 3, 12, 35, 125, 0.03, 0.5, 1.5]
+      },
+      {
+        fromUnit: 'cm²', toUnit: 'mm²', factor: 100, op: 'mul',
+        easyVals: [1.5, 2.5, 0.5, 0.25, 0.04, 0.05],
+        normalVals: [1.5, 2.5, 0.5, 0.25, 0.003, 0.008, 0.015, 0.03, 0.35, 1.25]
+      },
+      {
+        fromUnit: 'mm²', toUnit: 'cm²', factor: 100, op: 'div',
+        easyVals: [50, 150, 250, 25, 75, 40, 80],
+        normalVals: [50, 150, 250, 25, 75, 40, 80, 3, 12, 35, 125, 0.5, 5]
+      },
+      {
+        fromUnit: 'm²', toUnit: 'cm²', factor: 10000, op: 'mul', twoStep: true,
+        easyVals: [0.5, 0.25],
+        normalVals: [0.03, 0.25, 0.5, 1.5, 0.005, 0.0004, 0.0007, 0.0015, 0.08]
+      },
+      {
+        fromUnit: 'cm²', toUnit: 'm²', factor: 10000, op: 'div', twoStep: true,
+        easyVals: [2500, 5000],
+        normalVals: [0.03, 0.5, 5, 50, 300, 2500, 5000, 7500, 12500, 15000]
+      }
+    ],
+    weight: [
+      {
+        fromUnit: 't', toUnit: 'kg', factor: 1000, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.75, 1.2, 3],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.75, 1.25, 2.05, 0.002, 0.005, 0.008, 0.015, 0.03, 0.075, 0.35]
+      },
+      {
+        fromUnit: 'kg', toUnit: 't', factor: 1000, op: 'div',
+        easyVals: [500, 1500, 2500, 250, 750, 1200],
+        normalVals: [500, 1500, 2500, 250, 750, 1250, 1750, 40, 80, 120, 350, 650, 25, 5]
+      },
+      {
+        fromUnit: 'kg', toUnit: 'g', factor: 1000, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.05, 1.2],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.003, 0.006, 0.015, 0.03, 0.085, 1.25, 2.35, 0.45]
+      },
+      {
+        fromUnit: 'g', toUnit: 'kg', factor: 1000, op: 'div',
+        easyVals: [500, 1500, 2500, 250, 750, 400],
+        normalVals: [500, 1500, 2500, 250, 750, 400, 30, 75, 150, 350, 650, 1250, 1750, 5, 0.5]
+      },
+      {
+        fromUnit: 'g', toUnit: 'mg', factor: 1000, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.1],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.002, 0.005, 0.015, 0.03, 0.08, 1.25, 0.35]
+      },
+      {
+        fromUnit: 'mg', toUnit: 'g', factor: 1000, op: 'div',
+        easyVals: [500, 1500, 2500, 250, 750, 600],
+        normalVals: [500, 1500, 2500, 250, 750, 600, 25, 80, 120, 350, 650, 1250, 5]
+      }
+    ],
+    time: [
+      {
+        fromUnit: 'h', toUnit: 'min', factor: 60, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.75, 1, 2],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.05, 0.1, 0.15, 0.2, 0.35, 0.4, 0.45, 0.6, 1.25, 1.75, 2.25, 0.005, 0.015, 0.025]
+      },
+      {
+        fromUnit: 'min', toUnit: 'h', factor: 60, op: 'div',
+        easyVals: [30, 15, 45, 90, 120, 150],
+        normalVals: [30, 15, 45, 90, 120, 150, 6, 12, 18, 24, 36, 42, 48, 54, 75, 105, 135, 180, 3, 9]
+      },
+      {
+        fromUnit: 'min', toUnit: 's', factor: 60, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.75, 2],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.05, 0.1, 0.15, 0.2, 0.35, 0.4, 0.45, 1.25, 1.75, 0.005, 0.015, 0.025]
+      },
+      {
+        fromUnit: 's', toUnit: 'min', factor: 60, op: 'div',
+        easyVals: [30, 15, 45, 90, 120, 150],
+        normalVals: [30, 15, 45, 90, 120, 150, 6, 12, 18, 24, 36, 42, 48, 54, 75, 105, 180, 3, 9]
+      },
+      {
+        fromUnit: 'd', toUnit: 'h', factor: 24, op: 'mul',
+        easyVals: [0.5, 1.5, 2.5, 0.25, 0.75, 2],
+        normalVals: [0.5, 1.5, 2.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875, 1.25, 1.75, 2.25, 3]
+      },
+      {
+        fromUnit: 'h', toUnit: 'd', factor: 24, op: 'div',
+        easyVals: [12, 6, 18, 36, 48, 72],
+        normalVals: [12, 6, 18, 36, 48, 72, 3, 9, 15, 21, 30, 42, 60, 84, 96, 120]
+      }
+    ]
+  };
+
+  function getUnitConvertHint(domain, fromUnit, toUnit, factor, op) {
+    const dirWord = op === 'mul' ? 'malnehmen (·)' : 'teilen (:)';
+    if (domain === 'area') {
+      return `Flächen-Treppe: mm² ↔ cm² ↔ dm² ↔ m² ↔ a ↔ ha ↔ km². Pro Schritt gilt Faktor 100! Hier rechnest du ${dirWord} ${factor}.`;
+    }
+    if (domain === 'time') {
+      return `Zeit-Umrechnung: 1 d = 24 h, 1 h = 60 min, 1 min = 60 s (Achtung: kein Zehnersystem!). Rechne hier ${dirWord} ${factor}.`;
+    }
+    if (domain === 'weight') {
+      return `Gewichts-Treppe: 1 t = 1000 kg, 1 kg = 1000 g, 1 g = 1000 mg. Verschiebe das Komma beim ${op === 'mul' ? 'Malnehmen nach rechts' : 'Teilen nach links'} (${factor}).`;
+    }
+    return `Längen-Treppe: 1 km = 1000 m, 1 m = 10 dm = 100 cm, 1 dm = 10 cm, 1 cm = 10 mm. Rechne ${dirWord} ${factor}.`;
+  }
+
+  function generateUnitsConvert(difficulty = 'normal') {
+    const domain = pick(['length', 'area', 'weight', 'time']);
+    const pool = UNIT_CONVERT_DOMAINS[domain].filter(s => difficulty !== 'easy' || !s.twoStep);
+    const spec = pick(pool);
+    const fromVal = pick(difficulty === 'easy' ? spec.easyVals : spec.normalVals);
+    const rawAns = spec.op === 'mul' ? fromVal * spec.factor : fromVal / spec.factor;
+    const ans = roundTo(rawAns, 6);
+
+    const hint = getUnitConvertHint(domain, spec.fromUnit, spec.toUnit, spec.factor, spec.op);
+    const opSymbol = spec.op === 'mul' ? '·' : ':';
+    const explanation = `Rechnung: ${formatDE(fromVal)} ${spec.fromUnit} ${opSymbol} ${spec.factor} = ${formatDE(ans)} ${spec.toUnit}.`;
+
+    return {
+      category: CATEGORIES.UNITS_CONVERT,
+      inputType: 'decimal',
+      unitLabel: spec.toUnit,
+      promptHTML: `Rechne in die gesuchte Einheit um:<br><strong>${formatDE(fromVal)} ${spec.fromUnit}</strong> <span class="eq">=</span> <span class="blank-unit">? ${spec.toUnit}</span>`,
+      answer: ans,
+      displayAnswerHTML: `${formatDE(ans)} ${spec.toUnit}`,
+      hint,
+      explanation,
+      raw: {
+        domain,
+        fromVal,
+        fromUnit: spec.fromUnit,
+        toUnit: spec.toUnit,
+        factor: spec.factor,
+        op: spec.op
+      }
+    };
+  }
+
+  // =========================================================================
   // 6. Textaufgaben (alle Themengebiete rund um Jorvik)
   // =========================================================================
   function generateWordProblem(difficulty = 'normal') {
@@ -567,7 +826,8 @@
       CATEGORIES.BRACKETS_ORDER,
       CATEGORIES.FRACTIONS_REDUCE,
       CATEGORIES.DECIMALS_OPS,
-      CATEGORIES.DECIMALS_CONVERT
+      CATEGORIES.DECIMALS_CONVERT,
+      CATEGORIES.UNITS_CONVERT
     ]);
 
     if (subType === CATEGORIES.FRACTIONS_OPS) {
@@ -832,6 +1092,78 @@
       };
     }
 
+    if (subType === CATEGORIES.UNITS_CONVERT) {
+      const stories = [
+        {
+          domain: 'area',
+          fromVal: pick([4.5, 2.5, 5, 0.75]),
+          fromUnit: 'a',
+          toUnit: 'm²',
+          factor: 100,
+          op: 'mul',
+          buildPrompt: v => `Die neue Auslauf-Koppel am Moorland-Stall hat eine Fläche von <strong>${formatDE(v)} a</strong>. Wie viele Quadratmeter (m²) sind das?`
+        },
+        {
+          domain: 'area',
+          fromVal: pick([0.35, 0.5, 1.25]),
+          fromUnit: 'ha',
+          toUnit: 'm²',
+          factor: 10000,
+          op: 'mul',
+          buildPrompt: v => `Die große Weide hinter Valedale misst <strong>${formatDE(v)} ha</strong>. Wie vielen Quadratmetern (m²) entspricht das?`
+        },
+        {
+          domain: 'length',
+          fromVal: pick([1.5, 2.4, 0.75, 1.25]),
+          fromUnit: 'km',
+          toUnit: 'm',
+          factor: 1000,
+          op: 'mul',
+          buildPrompt: v => `Der Waldweg zum Wasserfall ist <strong>${formatDE(v)} km</strong> lang. Wie viele Meter (m) sind das?`
+        },
+        {
+          domain: 'weight',
+          fromVal: pick([1.25, 0.75, 2.5, 0.45]),
+          fromUnit: 't',
+          toUnit: 'kg',
+          factor: 1000,
+          op: 'mul',
+          buildPrompt: v => `Für den Winter bestellt der Reitstall <strong>${formatDE(v)} t</strong> Heu. Wie viele Kilogramm (kg) werden geliefert?`
+        },
+        {
+          domain: 'time',
+          fromVal: pick([1.5, 0.75, 1.25, 2.5]),
+          fromUnit: 'h',
+          toUnit: 'min',
+          factor: 60,
+          op: 'mul',
+          buildPrompt: v => `Das Springtraining mit Anne dauert <strong>${formatDE(v)} h</strong>. Wie viele Minuten (min) sind das?`
+        }
+      ];
+      const sc = pick(stories);
+      const ans = roundTo(sc.op === 'mul' ? sc.fromVal * sc.factor : sc.fromVal / sc.factor, 6);
+      const opSym = sc.op === 'mul' ? '·' : ':';
+      return {
+        category: CATEGORIES.WORD_PROBLEMS,
+        subCategory: CATEGORIES.UNITS_CONVERT,
+        inputType: 'decimal',
+        unitLabel: sc.toUnit,
+        promptHTML: sc.buildPrompt(sc.fromVal),
+        answer: ans,
+        displayAnswerHTML: `${formatDE(ans)} ${sc.toUnit}`,
+        hint: getUnitConvertHint(sc.domain, sc.fromUnit, sc.toUnit, sc.factor, sc.op),
+        explanation: `${formatDE(sc.fromVal)} ${sc.fromUnit} ${opSym} ${sc.factor} = ${formatDE(ans)} ${sc.toUnit}.`,
+        raw: {
+          domain: sc.domain,
+          fromVal: sc.fromVal,
+          fromUnit: sc.fromUnit,
+          toUnit: sc.toUnit,
+          factor: sc.factor,
+          op: sc.op
+        }
+      };
+    }
+
     // FRACTIONS_REDUCE als Textaufgabe
     const basePairs = [[1, 2], [1, 3], [2, 3], [1, 4], [3, 4], [2, 5], [3, 5], [4, 5], [5, 6]];
     const [baseNum, baseDen] = pick(basePairs);
@@ -859,12 +1191,12 @@
   // =========================================================================
   // Haupt-Generator & Antwort-Prüfung
   // =========================================================================
-  function generateTask(activeCategories, difficulty = 'normal') {
+  function generateTask(activeCategories, difficulty = 'normal', categoryWeights = null) {
     const pool = Array.isArray(activeCategories) && activeCategories.length > 0
       ? activeCategories
       : Object.values(CATEGORIES);
 
-    const cat = pick(pool);
+    const cat = categoryWeights ? pickWeightedCategory(pool, categoryWeights) : pick(pool);
     switch (cat) {
       case CATEGORIES.FRACTIONS_OPS: return generateFractionOps(difficulty);
       case CATEGORIES.FRACTIONS_UNITS: return generateFractionUnits(difficulty);
@@ -873,6 +1205,7 @@
       case CATEGORIES.FRACTIONS_REDUCE: return generateFractionReduce(difficulty);
       case CATEGORIES.DECIMALS_OPS: return generateDecimalsOps(difficulty);
       case CATEGORIES.DECIMALS_CONVERT: return generateDecimalsConvert(difficulty);
+      case CATEGORIES.UNITS_CONVERT: return generateUnitsConvert(difficulty);
       case CATEGORIES.WORD_PROBLEMS: return generateWordProblem(difficulty);
       default: return generateFractionOps(difficulty);
     }
@@ -1112,6 +1445,48 @@
       };
     }
 
+    if (cat === CATEGORIES.UNITS_CONVERT) {
+      const { domain, fromVal, factor, op } = task.raw;
+      let wrongVal;
+      let reason;
+
+      if (domain === 'area') {
+        const linearFactor = Math.round(Math.sqrt(factor));
+        wrongVal = roundTo(op === 'mul' ? fromVal * linearFactor : fromVal / linearFactor, 6);
+        reason = 'Bei Flächeneinheiten mit Faktor 10 statt 100 gerechnet!';
+      } else if (domain === 'time') {
+        const decFactor = factor === 60 ? 100 : 10;
+        wrongVal = roundTo(op === 'mul' ? fromVal * decFactor : fromVal / decFactor, 6);
+        reason = factor === 60
+          ? 'Bei Zeiteinheiten mit 100 statt 60 gerechnet!'
+          : 'Bei Tagen/Stunden mit Faktor 10 statt 24 gerechnet!';
+      } else {
+        wrongVal = task.answer >= 1
+          ? roundTo(task.answer / 10, 6)
+          : roundTo(task.answer * 10, 6);
+        reason = 'Komma beim Umrechnen um eine Stelle verrutscht!';
+      }
+
+      if (wrongVal < 1e-6 || Math.abs(wrongVal - task.answer) < 1e-9) {
+        wrongVal = roundTo(task.answer * 10, 6);
+      }
+
+      return {
+        lukasAnswerHTML: `${formatDE(wrongVal)} ${task.unitLabel}`,
+        isCorrect: false,
+        mistakeReason: reason,
+        reasonOptions: [
+          reason,
+          reason === 'Komma beim Umrechnen um eine Stelle verrutscht!'
+            ? 'Bei Flächeneinheiten mit Faktor 10 statt 100 gerechnet!'
+            : 'Komma beim Umrechnen um eine Stelle verrutscht!',
+          'Malnehmen und Teilen verwechselt!',
+          'Nullen vergessen / falsch umgerechnet!'
+        ].filter((v, idx, arr) => arr.indexOf(v) === idx),
+        lukasComment: pick(LUKAS_COMMENTS_FIXED)
+      };
+    }
+
     // BRACKETS_ORDER
     const wrongAns = task.answer + pick([-10, -6, 8, 12]);
     return {
@@ -1168,13 +1543,544 @@
     return items;
   }
 
+  // =========================================================================
+  // Spielmodus 3 / Zahlenblick: Disjunkte Ergebnis-Profile, Runen & Strategie-Pool
+  // =========================================================================
+  const RUNE_CONDITIONS = {
+    LT10: {
+      id: 'LT10',
+      shortLabel: '< 10',
+      label: '< 10',
+      icon: '🟢',
+      colorClass: 'profile-lt10',
+      dimension: 'size'
+    },
+    GE10: {
+      id: 'GE10',
+      shortLabel: '≥ 10',
+      label: '≥ 10',
+      icon: '🟣',
+      colorClass: 'profile-ge10',
+      dimension: 'size'
+    },
+    NEG: {
+      id: 'NEG',
+      shortLabel: '< 0',
+      label: '< 0',
+      icon: '❄️',
+      colorClass: 'profile-neg',
+      dimension: 'size'
+    },
+    EVEN: {
+      id: 'EVEN',
+      shortLabel: '2·4·6',
+      label: '2·4·6 (gerade)',
+      icon: '🔵',
+      colorClass: 'profile-even',
+      dimension: 'kind'
+    },
+    ODD: {
+      id: 'ODD',
+      shortLabel: '1·3·5',
+      label: '1·3·5 (ungerade)',
+      icon: '🟠',
+      colorClass: 'profile-odd',
+      dimension: 'kind'
+    },
+    FRAC: {
+      id: 'FRAC',
+      shortLabel: '½ · 0,5',
+      label: '½ · 0,5 (Bruch/Komma)',
+      icon: '💧',
+      colorClass: 'profile-frac',
+      dimension: 'kind'
+    }
+  };
+
+  const RESULT_PROFILES = {
+    NEG: {
+      id: 'NEG',
+      shortLabel: '< 0',
+      label: 'Negativ (< 0)',
+      icon: '❄️',
+      colorClass: 'profile-neg'
+    },
+    FRAC_LOW: {
+      id: 'FRAC_LOW',
+      shortLabel: '0 bis ½',
+      label: 'Bruch/Komma 0 bis ½',
+      icon: '💧',
+      colorClass: 'profile-frac-low'
+    },
+    FRAC_HIGH: {
+      id: 'FRAC_HIGH',
+      shortLabel: '½ bis 1',
+      label: 'Bruch/Komma ½ bis 1',
+      icon: '🌿',
+      colorClass: 'profile-frac-high'
+    },
+    DEC_GT1: {
+      id: 'DEC_GT1',
+      shortLabel: 'Bruch/Komma > 1',
+      label: 'Bruch/Komma > 1',
+      icon: '🌊',
+      colorClass: 'profile-dec-gt1'
+    },
+    SMALL_EVEN: {
+      id: 'SMALL_EVEN',
+      shortLabel: 'Gerade < 10',
+      label: 'Gerade & < 10',
+      icon: '⚡',
+      colorClass: 'profile-small-even'
+    },
+    SMALL_ODD: {
+      id: 'SMALL_ODD',
+      shortLabel: 'Ungerade < 10',
+      label: 'Ungerade & < 10',
+      icon: '🔥',
+      colorClass: 'profile-small-odd'
+    },
+    BIG_EVEN: {
+      id: 'BIG_EVEN',
+      shortLabel: 'Gerade ≥ 10',
+      label: 'Gerade & ≥ 10',
+      icon: '🌕',
+      colorClass: 'profile-big-even'
+    },
+    BIG_ODD: {
+      id: 'BIG_ODD',
+      shortLabel: 'Ungerade ≥ 10',
+      label: 'Ungerade & ≥ 10',
+      icon: '☀️',
+      colorClass: 'profile-big-odd'
+    }
+  };
+
+  function getTaskNumericValue(task) {
+    if (!task) return NaN;
+    if (task.inputType === 'fraction' && task.answer) {
+      return task.answer.num / task.answer.den;
+    }
+    return Number(task.answer);
+  }
+
+  function isTaskWholeNumber(task) {
+    if (!task) return false;
+    if (task.inputType === 'integer') return true;
+    if (task.inputType === 'fraction' && task.answer) {
+      return task.answer.den === 1;
+    }
+    const val = Number(task.answer);
+    return Number.isFinite(val) && Math.abs(val - Math.round(val)) < 1e-9;
+  }
+
+  function classifyTaskResult(task) {
+    const val = getTaskNumericValue(task);
+    const isWhole = isTaskWholeNumber(task);
+    if (val < -1e-9) return 'NEG';
+    if (!isWhole) {
+      if (val <= 0.5 + 1e-9) return 'FRAC_LOW';
+      if (val < 1 - 1e-9) return 'FRAC_HIGH';
+      return 'DEC_GT1';
+    }
+    const rounded = Math.round(val);
+    const isEven = Math.abs(rounded) % 2 === 0;
+    if (rounded < 10) {
+      return isEven ? 'SMALL_EVEN' : 'SMALL_ODD';
+    }
+    return isEven ? 'BIG_EVEN' : 'BIG_ODD';
+  }
+
+  function getConditionMeta(condId) {
+    return RUNE_CONDITIONS[condId] || RESULT_PROFILES[condId] || null;
+  }
+
+  function getMatchingRuneIds(task) {
+    const val = getTaskNumericValue(task);
+    if (!Number.isFinite(val)) return [];
+    const isWhole = isTaskWholeNumber(task);
+    const matches = [];
+    if (val < -1e-9) {
+      matches.push('NEG');
+    } else if (val < 10 - 1e-9) {
+      matches.push('LT10');
+    } else {
+      matches.push('GE10');
+    }
+    if (!isWhole) {
+      matches.push('FRAC');
+    } else {
+      const rounded = Math.round(val);
+      matches.push(Math.abs(rounded) % 2 === 0 ? 'EVEN' : 'ODD');
+    }
+    return matches;
+  }
+
+  function doesTaskMatchCondition(task, condId) {
+    if (!task || !condId) return false;
+    if (RUNE_CONDITIONS[condId]) {
+      return getMatchingRuneIds(task).includes(condId);
+    }
+    if (condId === 'NEG_EVEN' || condId === 'NEG_ODD') {
+      const runes = getMatchingRuneIds(task);
+      const parity = condId === 'NEG_EVEN' ? 'EVEN' : 'ODD';
+      return runes.includes('NEG') && runes.includes(parity);
+    }
+    if (condId === 'GE10_FRAC') {
+      const runes = getMatchingRuneIds(task);
+      return runes.includes('GE10') && runes.includes('FRAC');
+    }
+    return classifyTaskResult(task) === condId;
+  }
+
+  function getComboIntersectionProfile(runeA, runeB) {
+    if (!runeA || !runeB || runeA === runeB) return null;
+    const pair = new Set([runeA, runeB]);
+    if (pair.has('LT10') && pair.has('EVEN')) return 'SMALL_EVEN';
+    if (pair.has('LT10') && pair.has('ODD')) return 'SMALL_ODD';
+    if (pair.has('GE10') && pair.has('EVEN')) return 'BIG_EVEN';
+    if (pair.has('GE10') && pair.has('ODD')) return 'BIG_ODD';
+    if (pair.has('LT10') && pair.has('FRAC')) return pick(['FRAC_LOW', 'FRAC_HIGH']);
+    if (pair.has('GE10') && pair.has('FRAC')) return 'GE10_FRAC';
+    if (pair.has('NEG') && pair.has('EVEN')) return 'NEG_EVEN';
+    if (pair.has('NEG') && pair.has('ODD')) return 'NEG_ODD';
+    return null;
+  }
+
+  function getCategoryWeights(activeCategories, topicPerf = {}) {
+    const cats = Array.isArray(activeCategories) && activeCategories.length > 0
+      ? activeCategories
+      : Object.values(CATEGORIES);
+    const weights = {};
+    for (const cat of cats) {
+      const perf = topicPerf && topicPerf[cat] ? topicPerf[cat] : null;
+      const ema = perf && typeof perf.recentErrorEMA === 'number' ? perf.recentErrorEMA : 0.25;
+      const errors = perf && typeof perf.errors === 'number' ? perf.errors : 0;
+      const solved = perf && typeof perf.solved === 'number' ? perf.solved : 0;
+      weights[cat] = 1 + 3 * ema + Math.min(2, errors / Math.max(1, solved + 2));
+    }
+    return weights;
+  }
+
+  function pickWeightedCategory(activeCategories, categoryWeights) {
+    const pool = Array.isArray(activeCategories) && activeCategories.length > 0
+      ? activeCategories
+      : Object.values(CATEGORIES);
+    if (!categoryWeights) return pick(pool);
+    let total = 0;
+    for (const cat of pool) {
+      const w = Number(categoryWeights[cat]);
+      total += Number.isFinite(w) && w > 0 ? w : 1;
+    }
+    if (total <= 0) return pick(pool);
+    let r = Math.random() * total;
+    for (const cat of pool) {
+      const w = Number(categoryWeights[cat]);
+      const weight = Number.isFinite(w) && w > 0 ? w : 1;
+      r -= weight;
+      if (r <= 0) return cat;
+    }
+    return pool[pool.length - 1];
+  }
+
+  function createFallbackTaskForProfile(profileId) {
+    if (profileId === 'NEG') {
+      const a = randInt(2, 9);
+      const b = randInt(2, 9);
+      const ans = -a * b;
+      return {
+        category: CATEGORIES.SIGNED_MUL_DIV,
+        inputType: 'integer',
+        promptHTML: `${signedHTML(-a)} <span class="op">·</span> ${signedHTML(b)} <span class="eq">=</span>`,
+        answer: ans,
+        displayAnswerHTML: `${ans}`,
+        hint: 'Ungleiche Vorzeichen (Minus mal Plus) ergeben immer MINUS (−)!',
+        explanation: `(-${a}) · (+${b}) = ${ans}.`
+      };
+    }
+    if (profileId === 'FRAC_LOW') {
+      const bases = [[1, 4], [1, 3], [1, 5], [2, 5], [1, 2], [3, 8]];
+      const [bn, bd] = pick(bases);
+      const mult = randInt(3, 8);
+      return {
+        category: CATEGORIES.FRACTIONS_REDUCE,
+        inputType: 'fraction',
+        allowUnreduced: false,
+        promptHTML: `Kürze vollständig: ${fracHTML(bn * mult, bd * mult)} <span class="eq">=</span>`,
+        answer: { num: bn, den: bd },
+        displayAnswerHTML: fracHTML(bn, bd),
+        hint: `Teile Zähler und Nenner durch ${mult}.`,
+        explanation: `(${bn * mult} : ${mult}) über (${bd * mult} : ${mult}) = ${bn} über ${bd}.`
+      };
+    }
+    if (profileId === 'FRAC_HIGH') {
+      const bases = [[2, 3], [3, 4], [3, 5], [4, 5], [5, 6], [5, 8], [7, 8]];
+      const [bn, bd] = pick(bases);
+      const mult = randInt(3, 7);
+      return {
+        category: CATEGORIES.FRACTIONS_REDUCE,
+        inputType: 'fraction',
+        allowUnreduced: false,
+        promptHTML: `Kürze vollständig: ${fracHTML(bn * mult, bd * mult)} <span class="eq">=</span>`,
+        answer: { num: bn, den: bd },
+        displayAnswerHTML: fracHTML(bn, bd),
+        hint: `Teile Zähler und Nenner durch ${mult}.`,
+        explanation: `(${bn * mult} : ${mult}) über (${bd * mult} : ${mult}) = ${bn} über ${bd}.`
+      };
+    }
+    if (profileId === 'DEC_GT1') {
+      const a = randInt(11, 49) / 10;
+      const b = randInt(11, 39) / 10;
+      const ans = roundTo(a + b, 2);
+      const adjusted = Math.abs(ans - Math.round(ans)) < 1e-9 ? roundTo(ans + 0.3, 2) : ans;
+      const bAdj = roundTo(adjusted - a, 2);
+      return {
+        category: CATEGORIES.DECIMALS_OPS,
+        inputType: 'decimal',
+        unitLabel: '',
+        promptHTML: `${formatDE(a)} + ${formatDE(bAdj)} <span class="eq">=</span>`,
+        answer: adjusted,
+        displayAnswerHTML: formatDE(adjusted),
+        hint: 'Schreibe Komma unter Komma und addiere stellenweise.',
+        explanation: `${formatDE(a)} + ${formatDE(bAdj)} = ${formatDE(adjusted)}.`
+      };
+    }
+    if (profileId === 'SMALL_EVEN') {
+      const pairs = [[-2, -2], [-2, -3], [-2, -4], [-1, -4], [-1, -6], [-1, -8]];
+      const [a, b] = pick(pairs);
+      const ans = a * b;
+      return {
+        category: CATEGORIES.SIGNED_MUL_DIV,
+        inputType: 'integer',
+        promptHTML: `${signedHTML(a)} <span class="op">·</span> ${signedHTML(b)} <span class="eq">=</span>`,
+        answer: ans,
+        displayAnswerHTML: `${ans}`,
+        hint: 'Minus mal Minus ergibt Plus (+)!',
+        explanation: `(${a}) · (${b}) = ${ans}.`
+      };
+    }
+    if (profileId === 'SMALL_ODD') {
+      const a = randInt(3, 8);
+      const b = pick([1, 3, 5, 7, 9]);
+      const left = a + b;
+      return {
+        category: CATEGORIES.BRACKETS_ORDER,
+        inputType: 'integer',
+        promptHTML: `(${left} − ${a}) <span class="op">·</span> 1 <span class="eq">=</span>`,
+        answer: b,
+        displayAnswerHTML: `${b}`,
+        hint: 'Rechne zuerst die Klammer aus.',
+        explanation: `(${left} − ${a}) · 1 = ${b}.`
+      };
+    }
+    if (profileId === 'BIG_EVEN') {
+      const pairs = [[-2, -6], [-2, -8], [-3, -4], [-4, -4], [-4, -5], [-4, -6], [-5, -6]];
+      const [a, b] = pick(pairs);
+      const ans = a * b;
+      return {
+        category: CATEGORIES.SIGNED_MUL_DIV,
+        inputType: 'integer',
+        promptHTML: `${signedHTML(a)} <span class="op">·</span> ${signedHTML(b)} <span class="eq">=</span>`,
+        answer: ans,
+        displayAnswerHTML: `${ans}`,
+        hint: 'Gleiche Vorzeichen (Minus mal Minus) ergeben Plus (+).',
+        explanation: `(${a}) · (${b}) = ${ans}.`
+      };
+    }
+    if (profileId === 'NEG_EVEN') {
+      const pairs = [[-2, 3], [-2, 4], [-2, 7], [-4, 3], [-4, 5], [-6, 3]];
+      const [a, b] = pick(pairs);
+      const ans = a * b;
+      return {
+        category: CATEGORIES.SIGNED_MUL_DIV,
+        inputType: 'integer',
+        promptHTML: `${signedHTML(a)} <span class="op">·</span> ${signedHTML(b)} <span class="eq">=</span>`,
+        answer: ans,
+        displayAnswerHTML: `${ans}`,
+        hint: 'Minus mal Plus ergibt Minus (−), und das Ergebnis ist eine gerade Zahl.',
+        explanation: `(${a}) · (+${b}) = ${ans}.`
+      };
+    }
+    if (profileId === 'NEG_ODD') {
+      const pairs = [[-3, 3], [-3, 5], [-3, 7], [-5, 3], [-5, 5], [-7, 3]];
+      const [a, b] = pick(pairs);
+      const ans = a * b;
+      return {
+        category: CATEGORIES.SIGNED_MUL_DIV,
+        inputType: 'integer',
+        promptHTML: `${signedHTML(a)} <span class="op">·</span> ${signedHTML(b)} <span class="eq">=</span>`,
+        answer: ans,
+        displayAnswerHTML: `${ans}`,
+        hint: 'Minus mal Plus ergibt Minus (−), und das Ergebnis ist eine ungerade Zahl.',
+        explanation: `(${a}) · (+${b}) = ${ans}.`
+      };
+    }
+    if (profileId === 'GE10_FRAC') {
+      const a = randInt(55, 95) / 10;
+      const b = randInt(55, 85) / 10;
+      const ans = roundTo(a + b, 2);
+      const adjusted = Math.abs(ans - Math.round(ans)) < 1e-9 ? roundTo(ans + 0.4, 2) : ans;
+      const bAdj = roundTo(adjusted - a, 2);
+      return {
+        category: CATEGORIES.DECIMALS_OPS,
+        inputType: 'decimal',
+        unitLabel: '',
+        promptHTML: `${formatDE(a)} + ${formatDE(bAdj)} <span class="eq">=</span>`,
+        answer: adjusted,
+        displayAnswerHTML: formatDE(adjusted),
+        hint: 'Schreibe Komma unter Komma und addiere stellenweise.',
+        explanation: `${formatDE(a)} + ${formatDE(bAdj)} = ${formatDE(adjusted)}.`
+      };
+    }
+    if (profileId === 'LT10') {
+      return createFallbackTaskForProfile(pick(['SMALL_EVEN', 'SMALL_ODD']));
+    }
+    if (profileId === 'GE10') {
+      return createFallbackTaskForProfile(pick(['BIG_EVEN', 'BIG_ODD']));
+    }
+    if (profileId === 'EVEN') {
+      return createFallbackTaskForProfile(pick(['SMALL_EVEN', 'BIG_EVEN']));
+    }
+    if (profileId === 'ODD') {
+      return createFallbackTaskForProfile(pick(['SMALL_ODD', 'BIG_ODD']));
+    }
+    if (profileId === 'FRAC') {
+      return createFallbackTaskForProfile(pick(['FRAC_LOW', 'FRAC_HIGH', 'DEC_GT1']));
+    }
+
+    // BIG_ODD
+    const pairs = [[-3, -5], [-3, -7], [-3, -9], [-5, -5], [-5, -7], [-5, -9]];
+    const [a, b] = pick(pairs);
+    const ans = a * b;
+    return {
+      category: CATEGORIES.SIGNED_MUL_DIV,
+      inputType: 'integer',
+      promptHTML: `${signedHTML(a)} <span class="op">·</span> ${signedHTML(b)} <span class="eq">=</span>`,
+      answer: ans,
+      displayAnswerHTML: `${ans}`,
+      hint: 'Gleiche Vorzeichen (Minus mal Minus) ergeben Plus (+).',
+      explanation: `(${a}) · (${b}) = ${ans}.`
+    };
+  }
+
+  function generateTaskForProfile(profileId, activeCategories, difficulty = 'normal', categoryWeights = null) {
+    const pool = Array.isArray(activeCategories) && activeCategories.length > 0
+      ? activeCategories
+      : Object.values(CATEGORIES);
+
+    for (let i = 0; i < 140; i++) {
+      const t = generateTask(pool, difficulty, categoryWeights);
+      if (doesTaskMatchCondition(t, profileId)) {
+        return t;
+      }
+    }
+
+    const allCats = Object.values(CATEGORIES);
+    for (let i = 0; i < 80; i++) {
+      const t = generateTask(allCats, difficulty, categoryWeights);
+      if (doesTaskMatchCondition(t, profileId)) {
+        return t;
+      }
+    }
+
+    return createFallbackTaskForProfile(profileId);
+  }
+
+  function generateStrategicTaskPool(requiredProfileIds, activeCategories, difficulty = 'normal', categoryWeights = null, count = 4) {
+    const allProfileIds = Object.keys(RESULT_PROFILES);
+    const uniqueReq = [];
+    const seenReq = new Set();
+    if (Array.isArray(requiredProfileIds)) {
+      for (const id of requiredProfileIds) {
+        if ((RUNE_CONDITIONS[id] || RESULT_PROFILES[id]) && !seenReq.has(id)) {
+          seenReq.add(id);
+          uniqueReq.push(id);
+        }
+      }
+    }
+    const targets = uniqueReq.slice(0, count);
+    const tasks = [];
+    const seenPrompts = new Set();
+
+    function addUniqueTask(producerFn) {
+      let candidate = null;
+      for (let attempt = 0; attempt < 15; attempt++) {
+        const t = producerFn();
+        if (!seenPrompts.has(t.promptHTML)) {
+          candidate = t;
+          break;
+        }
+        candidate = t;
+      }
+      if (candidate) {
+        seenPrompts.add(candidate.promptHTML);
+        tasks.push(candidate);
+      }
+    }
+
+    // Prüfe zuerst, ob zwei der ersten benötigten Runen über ein Kombo-Ergebnis gemeinsam gelöst werden können
+    let comboTarget = null;
+    for (let i = 0; i < targets.length && !comboTarget; i++) {
+      for (let j = i + 1; j < targets.length && !comboTarget; j++) {
+        if (RUNE_CONDITIONS[targets[i]] && RUNE_CONDITIONS[targets[j]]) {
+          comboTarget = getComboIntersectionProfile(targets[i], targets[j]);
+        }
+      }
+    }
+    if (comboTarget && tasks.length < count) {
+      addUniqueTask(() => generateTaskForProfile(comboTarget, activeCategories, difficulty, categoryWeights));
+    }
+
+    for (const profileId of targets) {
+      if (tasks.length >= count) break;
+      const alreadyCovered = tasks.some(t => doesTaskMatchCondition(t, profileId));
+      if (!alreadyCovered) {
+        addUniqueTask(() => generateTaskForProfile(profileId, activeCategories, difficulty, categoryWeights));
+      }
+    }
+
+    const distractorProfiles = allProfileIds.filter(id => !seenReq.has(id));
+    for (let i = distractorProfiles.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [distractorProfiles[i], distractorProfiles[j]] = [distractorProfiles[j], distractorProfiles[i]];
+    }
+
+    let dIdx = 0;
+    while (tasks.length < count) {
+      if (dIdx < distractorProfiles.length) {
+        const pId = distractorProfiles[dIdx++];
+        addUniqueTask(() => generateTaskForProfile(pId, activeCategories, difficulty, categoryWeights));
+      } else {
+        addUniqueTask(() => generateTask(activeCategories, difficulty, categoryWeights));
+      }
+    }
+
+    for (let i = tasks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [tasks[i], tasks[j]] = [tasks[j], tasks[i]];
+    }
+
+    return tasks;
+  }
+
   return {
     CATEGORIES,
     CATEGORY_LABELS,
+    RUNE_CONDITIONS,
+    RESULT_PROFILES,
     gcd,
     simplify,
     fracHTML,
+    getTaskNumericValue,
+    getConditionMeta,
+    getMatchingRuneIds,
+    doesTaskMatchCondition,
+    getComboIntersectionProfile,
+    classifyTaskResult,
+    getCategoryWeights,
     generateTask,
+    generateTaskForProfile,
+    generateStrategicTaskPool,
     checkAnswer,
     generateLukasExam
   };

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jorvik Mathe-Abenteuer • 6. Klasse</title>
-  <link rel="stylesheet" href="styles.css?v=20261116b" />
+  <link rel="stylesheet" href="styles.css?v=20261119d" />
 </head>
 <body>
   <!-- Globale Top-Bar (immer sichtbar) -->
@@ -36,7 +36,8 @@
       <!-- Navigation & Mute -->
       <div class="top-actions">
         <nav class="mode-tabs" aria-label="Spielmodus wählen">
-          <button class="mode-tab active" data-mode="puzzle">✨ Bild-Puzzle</button>
+          <button class="mode-tab active" data-mode="labyrinth">🔦 Licht-Labyrinth</button>
+          <button class="mode-tab" data-mode="puzzle">✨ Bild-Puzzle</button>
           <button class="mode-tab" data-mode="detective">🖍️ Fehler-Detektiv</button>
           <button class="mode-tab" data-mode="vault">🏆 Schatzkammer <span id="vaultCountBadge" class="badge">0</span></button>
         </nav>
@@ -67,10 +68,24 @@
 
   <main class="main-container">
     <!-- =========================================================
-         SPIELMODUS 1: Magisches Bild-Puzzle
+         SPIELMODUS 1 & 3: Licht-Labyrinth & Magisches Bild-Puzzle
          ========================================================= -->
     <section id="mode-puzzle" class="mode-section active">
-      <div class="puzzle-toolbar">
+      <!-- Toolbar: Licht-Labyrinth -->
+      <div id="labyrinthToolbar" class="puzzle-toolbar">
+        <div class="toolbar-group">
+          <span class="toolbar-label">Labyrinth-Größe:</span>
+          <button id="labCompactBtn" class="btn-pill active">Kompakt • 6×6</button>
+          <button id="labMasterBtn" class="btn-pill">Meister • 7×7</button>
+        </div>
+        <div class="toolbar-group">
+          <span id="labSolvedBadge" class="tile-counter">0 Labyrinthe gelöst</span>
+          <button id="newLabyrinthBtn" class="btn-pill">Neues Labyrinth ↻</button>
+        </div>
+      </div>
+
+      <!-- Toolbar: Bild-Puzzle -->
+      <div id="puzzleToolbar" class="puzzle-toolbar hidden">
         <div class="toolbar-group">
           <span class="toolbar-label">Abenteuer-Größe:</span>
           <button id="grid12Btn" class="btn-pill active">Schneller Ritt (12 Teile)</button>
@@ -87,8 +102,37 @@
       </div>
 
       <div class="puzzle-layout">
-        <!-- Linke Spalte: Das Kristall-Puzzle -->
-        <div class="puzzle-stage-card">
+        <!-- Linke Spalte A: Das Licht-Labyrinth -->
+        <div id="labyrinthStageCard" class="puzzle-stage-card">
+          <div class="puzzle-header">
+            <div>
+              <h2 id="labyrinthTitle">Die Kristallkammer von Valedale</h2>
+              <p id="labyrinthSubtitle" class="muted-text">Lichtstrahl-Prüfung • Runenpfad</p>
+            </div>
+            <div id="labyrinthBeamStatus" class="tile-counter">
+              🔦 Strahl sucht Weg
+            </div>
+          </div>
+
+          <div id="labyrinthBoardWrap" class="labyrinth-board-wrap">
+            <div id="labyrinthGrid" class="labyrinth-grid"></div>
+            <svg id="labyrinthBeamSvg" class="labyrinth-beam-svg" aria-hidden="true"></svg>
+          </div>
+
+          <div id="labyrinthObstacleBar" class="labyrinth-obstacle-bar">
+            <div class="labyrinth-obstacle-title">⚡ Aktive Runen &amp; Kombo-Chancen:</div>
+            <div id="labyrinthObstacleList" class="labyrinth-obstacle-list"></div>
+          </div>
+
+          <div id="labyrinthCompletedBanner" class="completed-banner hidden">
+            <h3>🌟 Ziel-Kristall erreicht!</h3>
+            <p>Fantastischer Zahlenblick! Der Lichtstrahl hat den Pfad gemeistert und ein Bonus-Motiv für deine Schatzkammer freigeschaltet.</p>
+            <button id="nextLabyrinthBtn" class="btn-primary">Nächstes Licht-Labyrinth starten 🔦</button>
+          </div>
+        </div>
+
+        <!-- Linke Spalte B: Das Kristall-Puzzle -->
+        <div id="puzzleStageCard" class="puzzle-stage-card hidden">
           <div class="puzzle-header">
             <div>
               <h2 id="puzzleTitle">Das Sternenpferd im Wald von Jorvik</h2>
@@ -114,6 +158,14 @@
         <!-- Rechte Spalte: Aufgabe + Schmierzettel -->
         <div class="task-column">
           <div class="parchment-card task-card">
+            <div id="labyrinthTaskPoolWrap" class="labyrinth-task-pool-wrap">
+              <div class="labyrinth-pool-header">
+                <span id="labyrinthTargetHint" class="labyrinth-target-hint">🎯 Wähle eine Aufgabe für die nächste offene Rune!</span>
+                <button type="button" id="rerollTasksBtn" class="btn-small">🔄 4 Aufgaben neu mischen</button>
+              </div>
+              <div id="labyrinthTaskGrid" class="labyrinth-task-grid" role="listbox" aria-label="4 Rechenaufgaben zur strategischen Auswahl"></div>
+            </div>
+
             <div class="task-meta">
               <span id="taskCategoryBadge" class="cat-badge">Bruchrechnen</span>
               <span id="difficultyBadge" class="diff-badge hidden">🌿 Sanfter Galopp (Aufhol-Hilfe)</span>
@@ -245,6 +297,7 @@
           <p>Jedes vollständig aufgedeckte Puzzle wird hier als magisches Erinnerungsbild gesammelt.</p>
         </div>
         <div class="vault-stats">
+          <div class="stat-pill">🔦 Labyrinthe gelöst: <strong id="statLabyrinths">0</strong></div>
           <div class="stat-pill">✨ Gelöste Aufgaben: <strong id="statSolved">0</strong></div>
           <div class="stat-pill">🧩 Bilder gesammelt: <strong id="statPuzzles">0</strong></div>
           <div class="stat-pill">⭐ Prüfer-Sterne: <strong id="statStars">0</strong></div>
@@ -268,11 +321,12 @@
   </div>
 
   <!-- Scripts (klassisch geladen, damit es auch direkt per file:// ohne Server läuft) -->
-  <script src="assets/puzzles/customPuzzles.js?v=20261116b"></script>
-  <script src="js/soundEngine.js?v=20261116b"></script>
-  <script src="js/artworkGenerator.js?v=20261116b"></script>
-  <script src="js/mathGenerator.js?v=20261116b"></script>
-  <script src="js/scratchpad.js?v=20261116b"></script>
-  <script src="js/app.js?v=20261116b"></script>
+  <script src="assets/puzzles/customPuzzles.js?v=20261119b"></script>
+  <script src="js/soundEngine.js?v=20261119b"></script>
+  <script src="js/artworkGenerator.js?v=20261119b"></script>
+  <script src="js/mathGenerator.js?v=20261119d"></script>
+  <script src="js/labyrinthEngine.js?v=20261119d"></script>
+  <script src="js/scratchpad.js?v=20261119b"></script>
+  <script src="js/app.js?v=20261119d"></script>
 </body>
 </html>
